@@ -5,6 +5,7 @@ import { applyReadOnlyGuard } from "@/worker/vendpago/readOnlyGuard";
 import {
   launchBrowser,
   loginNoVendPagoSeNecessario,
+  encontrarLinkHandoffSso,
   LOGIN_PATH_PREFIX,
   LISTING_PATH_PATTERN,
 } from "@/worker/vendpago/scraper";
@@ -68,10 +69,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // link de handoff de SSO quando o destino é um domínio diferente do login.
     const linksAposLogin = await extrairLinks();
 
-    // Se o login aconteceu, a navegação original pode ter sido perdida — refaz,
-    // mas só quando o login não nos deixou já no host de destino (evita descartar
-    // um possível ticket/token de SSO presente na URL de retorno).
+    // Se o destino é um domínio diferente do host onde o login aconteceu, a
+    // sessão não é compartilhada automaticamente — é preciso passar pelo link
+    // de handoff de SSO (aba ERP/VendTEF/PayBlu) antes da URL de destino real.
+    let handoffUsado: string | null = null;
     if (new URL(urlAposLogin).host !== parsed.host) {
+      handoffUsado = encontrarLinkHandoffSso(linksAposLogin, parsed.host);
+      if (handoffUsado) {
+        await page.goto(handoffUsado, { waitUntil: "networkidle" });
+      }
       await page.goto(parsed.toString(), { waitUntil: "networkidle" });
     }
 
@@ -109,6 +115,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         requestedUrl: parsed.toString(),
         urlAposLogin,
         linksAposLogin,
+        handoffUsado,
         finalUrl,
         title,
         pareceLogin: finalUrl.includes(LOGIN_PATH_PREFIX),

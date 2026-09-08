@@ -17,6 +17,31 @@ export const LOGIN_PATH_PREFIX = "/auth/login";
  */
 export const LISTING_PATH_PATTERN = "/format/json";
 
+export interface LinkPagina {
+  text: string;
+  href: string;
+}
+
+/**
+ * O VendPago não compartilha sessão automaticamente entre domínios irmãos
+ * (erpvending.com.br, portalvendtef.com.br, portalpayblu.com.br): navegar
+ * direto para uma URL de destino num desses domínios volta para a tela de
+ * login. A página autenticada do erpvending.com.br expõe, nas abas de
+ * navegação (ERP/VendTEF/PayBlu), um link de handoff de SSO com token de uso
+ * único (`https://<host-destino>/token/<token>/link_redirect/...`) —
+ * visitar esse link antes da URL de destino real estabelece a sessão lá.
+ */
+export function encontrarLinkHandoffSso(links: readonly LinkPagina[], hostDestino: string): string | null {
+  for (const link of links) {
+    try {
+      if (new URL(link.href).host === hostDestino) return link.href;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 function lancarSeBloqueado(guard: ReadOnlyGuard): void {
   const bloqueado = guard.getBlockedAttempt();
   if (bloqueado) {
