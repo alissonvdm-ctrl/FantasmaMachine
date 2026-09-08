@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { secretsMatch } from "@/lib/crypto";
 import { applyReadOnlyGuard } from "@/worker/vendpago/readOnlyGuard";
-import { launchBrowser, loginNoVendPagoSeNecessario, LOGIN_PATH_PREFIX } from "@/worker/vendpago/scraper";
+import {
+  launchBrowser,
+  loginNoVendPagoSeNecessario,
+  LOGIN_PATH_PREFIX,
+  LISTING_PATH_PATTERN,
+} from "@/worker/vendpago/scraper";
 
 const ALLOWED_HOSTS = new Set(["www.erpvending.com.br", "www.portalvendtef.com.br"]);
 
@@ -44,7 +49,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const browser = await launchBrowser();
   try {
     const context = await browser.newContext();
-    const guard = await applyReadOnlyGuard(context, parsed.host, [LOGIN_PATH_PREFIX]);
+    const guard = await applyReadOnlyGuard(context, parsed.host, [LOGIN_PATH_PREFIX], [LISTING_PATH_PATTERN]);
     const page = await context.newPage();
     page.setDefaultTimeout(45000);
 

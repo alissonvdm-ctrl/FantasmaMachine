@@ -7,6 +7,9 @@ import { applyReadOnlyGuard, WriteAttemptError, type ReadOnlyGuard } from "@/wor
 /** Único caminho autorizado a fazer POST no ERP — estabelece sessão, não altera dado de negócio. */
 export const LOGIN_PATH_PREFIX = "/auth/login";
 
+/** Padrão de path das telas de listagem (DataTables server-side): POST de leitura, sem efeito de negócio. */
+export const LISTING_PATH_PATTERN = "/listar/";
+
 function lancarSeBloqueado(guard: ReadOnlyGuard): void {
   const bloqueado = guard.getBlockedAttempt();
   if (bloqueado) {
@@ -50,7 +53,7 @@ export async function coletarHtmlEstoque(): Promise<string> {
   const browser = await launchBrowser();
   try {
     const context = await browser.newContext();
-    const guard = await applyReadOnlyGuard(context, config.erpHost, [LOGIN_PATH_PREFIX]);
+    const guard = await applyReadOnlyGuard(context, config.erpHost, [LOGIN_PATH_PREFIX], [LISTING_PATH_PATTERN]);
 
     const page = await context.newPage();
     page.setDefaultTimeout(config.playwrightTimeoutMs);

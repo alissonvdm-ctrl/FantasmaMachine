@@ -13,7 +13,11 @@ function createFakeRoute(method: string, url: string) {
 
 type RouteHandler = (route: ReturnType<typeof createFakeRoute>) => Promise<void>;
 
-async function setupGuard(erpHost: string, allowedWritePathPrefixes: readonly string[] = []) {
+async function setupGuard(
+  erpHost: string,
+  allowedWritePathPrefixes: readonly string[] = [],
+  allowedReadListingPathPatterns: readonly string[] = [],
+) {
   let handler: RouteHandler | undefined;
   const context = {
     route: vi.fn(async (_pattern: string, fn: RouteHandler) => {
@@ -21,7 +25,7 @@ async function setupGuard(erpHost: string, allowedWritePathPrefixes: readonly st
     }),
   } as unknown as BrowserContext;
 
-  const guard = await applyReadOnlyGuard(context, erpHost, allowedWritePathPrefixes);
+  const guard = await applyReadOnlyGuard(context, erpHost, allowedWritePathPrefixes, allowedReadListingPathPatterns);
   if (!handler) throw new Error("Handler não registrado pelo guard");
   return { handler, guard };
 }
@@ -80,6 +84,27 @@ describe("applyReadOnlyGuard (AT-004)", () => {
   it("continua bloqueando POST fora do caminho de login liberado", async () => {
     const { handler, guard } = await setupGuard(erpHost, ["/auth/login"]);
     const route = createFakeRoute("POST", `https://${erpHost}/produtos/1`);
+
+    await handler(route);
+
+    expect(route.abort).toHaveBeenCalledWith("blockedbyclient");
+    expect(guard.getBlockedAttempt()).not.toBeNull();
+  });
+
+  it("permite POST em tela de listagem (padrão DataTables) quando o padrão é liberado", async () => {
+    const { handler, guard } = await setupGuard(erpHost, ["/auth/login"], ["/listar/"]);
+    const route = createFakeRoute("POST", `https://${erpHost}/produtos/listar/format/json`);
+
+    await handler(route);
+
+    expect(route.continue).toHaveBeenCalledOnce();
+    expect(route.abort).not.toHaveBeenCalled();
+    expect(guard.getBlockedAttempt()).toBeNull();
+  });
+
+  it("continua bloqueando POST de listagem quando o padrão não foi liberado", async () => {
+    const { handler, guard } = await setupGuard(erpHost, ["/auth/login"]);
+    const route = createFakeRoute("POST", `https://${erpHost}/produtos/listar/format/json`);
 
     await handler(route);
 

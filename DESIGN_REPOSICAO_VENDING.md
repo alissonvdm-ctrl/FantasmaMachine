@@ -126,6 +126,8 @@
 
 **Amendment (2026-09-08, pós-reconhecimento em produção):** O login real do VendPago exige POST para `/auth/login/index` (form com `#username`/`#password`/botão `#login`) — sem esse POST não há como autenticar, então o guard original bloquearia até o próprio login. `applyReadOnlyGuard` passou a aceitar uma lista explícita de prefixos de caminho liberados para escrita (`allowedWritePathPrefixes`), usada exclusivamente para `/auth/login`. Continua bloqueando qualquer outro POST/PUT/DELETE/PATCH no host do ERP — a exceção é auditável, mínima e documentada, não uma abertura geral.
 
+**Amendment (2026-09-08, 2ª rodada de reconhecimento):** A tela `/produtos` do VendPago carrega sua tabela via POST em `/produtos/listar/format/json` (padrão DataTables server-side: paginação/ordenação via POST, corpo sem efeito colateral de negócio — apenas parâmetros de listagem). Bloquear esse POST como "escrita" impede a própria leitura que o guard deveria viabilizar. `applyReadOnlyGuard` passou a aceitar também `allowedReadListingPathPatterns`: uma lista de substrings de path que, quando presentes, classificam o POST como leitura de listagem (não escrita de negócio) mesmo sem método GET. Usado com o padrão `/listar/`, presente em todas as telas de listagem do VendPago observadas até agora (produtos, e — a confirmar — estoque-interno). Continua bloqueando qualquer POST fora de `/auth/login` e fora desse padrão de listagem.
+
 **Rationale:** Transforma "somente leitura" em invariante verificável por teste automatizado, satisfazendo AT-004 sem depender de disciplina humana.
 
 **Alternatives Rejected:**

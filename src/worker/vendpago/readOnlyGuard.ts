@@ -28,11 +28,19 @@ export interface ReadOnlyGuard {
  * um POST para estabelecer sessão, o que não é "escrita" no sentido do
  * negócio (não altera estoque/produtos). Fora esses prefixos, todo método
  * diferente de GET continua bloqueado.
+ *
+ * `allowedReadListingPathPatterns` cobre um segundo caso descoberto em
+ * produção: telas de listagem do VendPago (ex.: `/produtos`) carregam sua
+ * tabela via POST no padrão DataTables server-side (paginação/ordenação),
+ * sem efeito colateral de negócio. Path que contenha um desses padrões é
+ * tratado como leitura mesmo sendo POST — diferente de `allowedWritePathPrefixes`,
+ * que libera escrita de fato (login).
  */
 export async function applyReadOnlyGuard(
   context: BrowserContext,
   erpHost: string,
   allowedWritePathPrefixes: readonly string[] = [],
+  allowedReadListingPathPatterns: readonly string[] = [],
 ): Promise<ReadOnlyGuard> {
   let blocked: BlockedAttempt | null = null;
 
@@ -42,8 +50,9 @@ export async function applyReadOnlyGuard(
     const isErp = url.host === erpHost;
     const isRead = request.method() === "GET";
     const isAllowedWrite = allowedWritePathPrefixes.some((prefix) => url.pathname.startsWith(prefix));
+    const isAllowedListing = allowedReadListingPathPatterns.some((pattern) => url.pathname.includes(pattern));
 
-    if (isErp && !isRead && !isAllowedWrite) {
+    if (isErp && !isRead && !isAllowedWrite && !isAllowedListing) {
       blocked = { method: request.method(), url: request.url() };
       await route.abort("blockedbyclient");
       return;
