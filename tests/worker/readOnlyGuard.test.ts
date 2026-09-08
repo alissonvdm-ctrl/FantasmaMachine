@@ -13,7 +13,7 @@ function createFakeRoute(method: string, url: string) {
 
 type RouteHandler = (route: ReturnType<typeof createFakeRoute>) => Promise<void>;
 
-async function setupGuard(erpHost: string) {
+async function setupGuard(erpHost: string, allowedWritePathPrefixes: readonly string[] = []) {
   let handler: RouteHandler | undefined;
   const context = {
     route: vi.fn(async (_pattern: string, fn: RouteHandler) => {
@@ -21,7 +21,7 @@ async function setupGuard(erpHost: string) {
     }),
   } as unknown as BrowserContext;
 
-  const guard = await applyReadOnlyGuard(context, erpHost);
+  const guard = await applyReadOnlyGuard(context, erpHost, allowedWritePathPrefixes);
   if (!handler) throw new Error("Handler não registrado pelo guard");
   return { handler, guard };
 }
@@ -64,5 +64,26 @@ describe("applyReadOnlyGuard (AT-004)", () => {
     expect(route.continue).toHaveBeenCalledOnce();
     expect(route.abort).not.toHaveBeenCalled();
     expect(guard.getBlockedAttempt()).toBeNull();
+  });
+
+  it("permite POST ao caminho de login explicitamente liberado", async () => {
+    const { handler, guard } = await setupGuard(erpHost, ["/auth/login"]);
+    const route = createFakeRoute("POST", `https://${erpHost}/auth/login/index?ref=/produtos`);
+
+    await handler(route);
+
+    expect(route.continue).toHaveBeenCalledOnce();
+    expect(route.abort).not.toHaveBeenCalled();
+    expect(guard.getBlockedAttempt()).toBeNull();
+  });
+
+  it("continua bloqueando POST fora do caminho de login liberado", async () => {
+    const { handler, guard } = await setupGuard(erpHost, ["/auth/login"]);
+    const route = createFakeRoute("POST", `https://${erpHost}/produtos/1`);
+
+    await handler(route);
+
+    expect(route.abort).toHaveBeenCalledWith("blockedbyclient");
+    expect(guard.getBlockedAttempt()).not.toBeNull();
   });
 });

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chromium } from "playwright-core";
-import sparticuzChromium from "@sparticuz/chromium";
 import { config } from "@/lib/config";
 import { secretsMatch } from "@/lib/crypto";
+import { applyReadOnlyGuard } from "@/worker/vendpago/readOnlyGuard";
+import { launchBrowser, loginNoVendPagoSeNecessario, LOGIN_PATH_PREFIX } from "@/worker/vendpago/scraper";
 
 const ALLOWED_HOSTS = new Set(["www.erpvending.com.br", "www.portalvendtef.com.br"]);
 
@@ -14,9 +14,11 @@ interface FormInfo {
 
 /**
  * Endpoint de diagnóstico temporário (não faz parte do File Manifest original):
- * navega (somente GET, sem login) até uma URL do VendPago/VendTEF e devolve a
- * estrutura da página (formulários e tabelas) para permitir escrever o parser
- * real sem nunca ter visto o HTML de produção. Removido depois do reconhecimento.
+ * loga no VendPago (se a página pedir) e navega até uma URL do
+ * erpvending.com.br ou portalvendtef.com.br, devolvendo formulários e tabelas
+ * encontrados em JSON. Necessário porque o parser real e o scraper foram
+ * escritos sem nunca ter visto o HTML de produção. Removido depois do
+ * reconhecimento.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const secret = request.nextUrl.searchParams.get("secret") ?? "";
@@ -39,20 +41,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Host não permitido: " + parsed.host }, { status: 400 });
   }
 
-  const browser = await chromium.launch({
-    args: sparticuzChromium.args,
-    executablePath: await sparticuzChromium.executablePath(),
-    headless: true,
-  });
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext();
+    const guard = await applyReadOnlyGuard(context, parsed.host, [LOGIN_PATH_PREFIX]);
     const page = await context.newPage();
     page.setDefaultTimeout(45000);
 
     await page.goto(parsed.toString(), { waitUntil: "networkidle" });
+    await loginNoVendPagoSeNecessario(page, guard);
+
+    // Se o login aconteceu, a navegação original pode ter sido perdida — refaz.
+    if (page.url() !== parsed.toString()) {
+      await page.goto(parsed.toString(), { waitUntil: "networkidle" });
+    }
 
     const finalUrl = page.url();
     const title = await page.title();
+    const bloqueado = guard.getBlockedAttempt();
 
     const forms: FormInfo[] = await page.$$eval("form", (elements) =>
       elements.map((form) => ({
@@ -75,14 +81,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ),
     );
 
-    const bodyTextSnippet = (await page.innerText("body")).slice(0, 4000);
+    const bodyTextSnippet = (await page.innerText("body")).slice(0, 6000);
 
     return NextResponse.json(
       {
         requestedUrl: parsed.toString(),
         finalUrl,
         title,
-        pareceLogin: /login|senha|password/i.test(finalUrl) || /login|senha/i.test(title),
+        pareceLogin: finalUrl.includes(LOGIN_PATH_PREFIX),
+        tentativaDeEscritaBloqueada: bloqueado,
         forms,
         tables,
         bodyTextSnippet,

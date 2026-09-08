@@ -124,6 +124,8 @@
 
 **Choice:** Interceptar todas as requisições do contexto Playwright e abortar qualquer método diferente de GET dirigido ao domínio do VendPago, lançando erro que falha a sincronização.
 
+**Amendment (2026-09-08, pós-reconhecimento em produção):** O login real do VendPago exige POST para `/auth/login/index` (form com `#username`/`#password`/botão `#login`) — sem esse POST não há como autenticar, então o guard original bloquearia até o próprio login. `applyReadOnlyGuard` passou a aceitar uma lista explícita de prefixos de caminho liberados para escrita (`allowedWritePathPrefixes`), usada exclusivamente para `/auth/login`. Continua bloqueando qualquer outro POST/PUT/DELETE/PATCH no host do ERP — a exceção é auditável, mínima e documentada, não uma abertura geral.
+
 **Rationale:** Transforma "somente leitura" em invariante verificável por teste automatizado, satisfazendo AT-004 sem depender de disciplina humana.
 
 **Alternatives Rejected:**

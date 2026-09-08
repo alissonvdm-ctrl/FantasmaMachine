@@ -23,8 +23,17 @@ export interface ReadOnlyGuard {
  * de evento que não propaga a exceção para quem chamou page.goto()/click()
  * — lançar ali vira unhandled rejection, não erro no chamador. O chamador
  * (scraper.ts) deve checar getBlockedAttempt() e lançar WriteAttemptError.
+ *
+ * `allowedWritePathPrefixes` é uma exceção mínima e explícita: o login exige
+ * um POST para estabelecer sessão, o que não é "escrita" no sentido do
+ * negócio (não altera estoque/produtos). Fora esses prefixos, todo método
+ * diferente de GET continua bloqueado.
  */
-export async function applyReadOnlyGuard(context: BrowserContext, erpHost: string): Promise<ReadOnlyGuard> {
+export async function applyReadOnlyGuard(
+  context: BrowserContext,
+  erpHost: string,
+  allowedWritePathPrefixes: readonly string[] = [],
+): Promise<ReadOnlyGuard> {
   let blocked: BlockedAttempt | null = null;
 
   await context.route("**/*", async (route) => {
@@ -32,8 +41,9 @@ export async function applyReadOnlyGuard(context: BrowserContext, erpHost: strin
     const url = new URL(request.url());
     const isErp = url.host === erpHost;
     const isRead = request.method() === "GET";
+    const isAllowedWrite = allowedWritePathPrefixes.some((prefix) => url.pathname.startsWith(prefix));
 
-    if (isErp && !isRead) {
+    if (isErp && !isRead && !isAllowedWrite) {
       blocked = { method: request.method(), url: request.url() };
       await route.abort("blockedbyclient");
       return;
