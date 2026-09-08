@@ -1,0 +1,10 @@
+{
+  "name": "Reposição Vending",
+  "short_name": "Reposição",
+  "description": "Registro rápido de reposição de molas em campo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": []
+}

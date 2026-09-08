@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    command: ["npm", "start"]
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - data:/app/data
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["npm", "run", "worker"]
+    env_file:
+      - .env
+    volumes:
+      - data:/app/data
+    restart: unless-stopped
+
+volumes:
+  data:

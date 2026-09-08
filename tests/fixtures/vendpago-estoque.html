@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Estoque — VendPago</title>
+</head>
+<body>
+  <h1>Estoque da máquina</h1>
+  <table id="tabela-estoque">
+    <thead>
+      <tr>
+        <th>Mola</th>
+        <th>Produto</th>
+        <th>Quantidade</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mola-codigo">A1</td>
+        <td class="produto-codigo">COCA350</td>
+        <td class="quantidade">8</td>
+      </tr>
+      <tr>
+        <td class="mola-codigo">A2</td>
+        <td class="produto-codigo">GUARANA350</td>
+        <td class="quantidade">5</td>
+      </tr>
+      <tr>
+        <td class="mola-codigo">B1</td>
+        <td class="produto-codigo">AGUA500</td>
+        <td class="quantidade">0</td>
+      </tr>
+      <tr>
+        <!-- linha malformada: sem quantidade — deve ser ignorada pelo parser -->
+        <td class="mola-codigo">B2</td>
+        <td class="produto-codigo">CHOCOLATE</td>
+        <td class="quantidade"></td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

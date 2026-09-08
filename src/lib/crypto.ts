@@ -1,0 +1,63 @@
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
+
+const ALGORITHM = "aes-256-gcm";
+const IV_LENGTH = 12;
+
+/**
+ * Cifra um segredo (ex.: senha do VendPago) com AES-256-GCM.
+ * `encryptionKeyBase64` deve decodificar para exatamente 32 bytes.
+ * Saída: "<iv>:<authTag>:<ciphertext>", tudo em base64.
+ */
+export function encrypt(plaintext: string, encryptionKeyBase64: string): string {
+  const key = Buffer.from(encryptionKeyBase64, "base64");
+  if (key.length !== 32) {
+    throw new Error("ENCRYPTION_KEY inválida: esperado 32 bytes em base64");
+  }
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return [iv.toString("base64"), authTag.toString("base64"), ciphertext.toString("base64")].join(":");
+}
+
+export function decrypt(payload: string, encryptionKeyBase64: string): string {
+  const key = Buffer.from(encryptionKeyBase64, "base64");
+  if (key.length !== 32) {
+    throw new Error("ENCRYPTION_KEY inválida: esperado 32 bytes em base64");
+  }
+  const parts = payload.split(":");
+  if (parts.length !== 3) {
+    throw new Error("Payload cifrado malformado");
+  }
+  const [ivB64, authTagB64, ciphertextB64] = parts as [string, string, string];
+  const iv = Buffer.from(ivB64, "base64");
+  const authTag = Buffer.from(authTagB64, "base64");
+  const ciphertext = Buffer.from(ciphertextB64, "base64");
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return plaintext.toString("utf8");
+}
+
+/** Token de dispositivo: 32 bytes aleatórios, codificados em hex para caber numa URL. */
+export function generateDeviceToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+export function hashToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+/** Comparação em tempo constante entre dois hashes hex de mesmo comprimento esperado. */
+export function hashesMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "hex");
+  const bufB = Buffer.from(b, "hex");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
