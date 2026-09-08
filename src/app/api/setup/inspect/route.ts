@@ -53,9 +53,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const page = await context.newPage();
     page.setDefaultTimeout(45000);
 
+    const extrairLinks = (): Promise<Array<{ text: string; href: string }>> =>
+      page.$$eval("a[href]", (anchors) =>
+        anchors
+          .map((a) => ({ text: (a.textContent ?? "").trim(), href: a.getAttribute("href") ?? "" }))
+          .filter((l) => l.href && l.href !== "#"),
+      );
+
     await page.goto(parsed.toString(), { waitUntil: "networkidle" });
     await loginNoVendPagoSeNecessario(page, guard);
     const urlAposLogin = page.url();
+    // Links da página logo após o login, antes de qualquer re-navegação — é aqui
+    // que aparece a navegação real (abas ERP/VendTEF/PayBlu), útil para achar o
+    // link de handoff de SSO quando o destino é um domínio diferente do login.
+    const linksAposLogin = await extrairLinks();
 
     // Se o login aconteceu, a navegação original pode ter sido perdida — refaz,
     // mas só quando o login não nos deixou já no host de destino (evita descartar
@@ -89,11 +100,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ),
     );
 
-    const links: Array<{ text: string; href: string }> = await page.$$eval("a[href]", (anchors) =>
-      anchors
-        .map((a) => ({ text: (a.textContent ?? "").trim(), href: a.getAttribute("href") ?? "" }))
-        .filter((l) => l.href && l.href !== "#"),
-    );
+    const links = await extrairLinks();
 
     const bodyTextSnippet = (await page.innerText("body")).slice(0, 6000);
 
@@ -101,6 +108,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       {
         requestedUrl: parsed.toString(),
         urlAposLogin,
+        linksAposLogin,
         finalUrl,
         title,
         pareceLogin: finalUrl.includes(LOGIN_PATH_PREFIX),
