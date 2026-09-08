@@ -125,6 +125,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const links = await extrairLinks();
 
+    // A paginação do DataTables (ex.: botão "próxima página") não usa <a href>
+    // real — captura por convenção de id (visto em "produtos-table-pagination-
+    // page-size") para achar o seletor certo de clique.
+    const elementosPaginacao: Array<{ tag: string; id: string | null; className: string; text: string }> =
+      await page.$$eval('[id*="pagination" i], [class*="pagination" i]', (elements) =>
+        elements.map((el) => ({
+          tag: el.tagName.toLowerCase(),
+          id: el.getAttribute("id"),
+          className: el.getAttribute("class") ?? "",
+          text: (el.textContent ?? "").trim().slice(0, 80),
+        })),
+      );
+
     const bodyTextSnippet = (await page.innerText("body")).slice(0, 6000);
 
     return NextResponse.json(
@@ -139,6 +152,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         tentativaDeEscritaBloqueada: bloqueado,
         forms,
         selects,
+        elementosPaginacao,
         tables,
         links,
         bodyTextSnippet,
