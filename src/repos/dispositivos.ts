@@ -1,5 +1,5 @@
-import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
+import type { DbHandle } from "@/db/client";
 import { generateDeviceToken, hashToken } from "@/lib/crypto";
 import type { Dispositivo } from "@/domain/types";
 
@@ -25,10 +25,10 @@ function toDomain(row: DispositivoRow): Dispositivo {
  * Cria um dispositivo e devolve o token em texto puro exatamente uma vez —
  * apenas o hash SHA-256 é persistido (Decision 4 do DESIGN).
  */
-export function criarDispositivo(
-  db: Database.Database,
+export async function criarDispositivo(
+  db: DbHandle,
   nome: string,
-): { dispositivo: Dispositivo; token: string } {
+): Promise<{ dispositivo: Dispositivo; token: string }> {
   const token = generateDeviceToken();
   const dispositivo: Dispositivo = {
     id: randomUUID(),
@@ -37,27 +37,28 @@ export function criarDispositivo(
     ativo: true,
     criadoEm: new Date().toISOString(),
   };
-  db.prepare(
-    `INSERT INTO dispositivos (id, nome, token_hash, ativo, criado_em)
-     VALUES (@id, @nome, @tokenHash, 1, @criadoEm)`,
-  ).run(dispositivo);
+  await db.execute({
+    sql: `INSERT INTO dispositivos (id, nome, token_hash, ativo, criado_em)
+          VALUES (@id, @nome, @tokenHash, 1, @criadoEm)`,
+    args: { ...dispositivo },
+  });
   return { dispositivo, token };
 }
 
-export function getDispositivoPorTokenHash(db: Database.Database, tokenHash: string): Dispositivo | null {
-  const row = db
-    .prepare("SELECT id, nome, token_hash, ativo, criado_em FROM dispositivos WHERE token_hash = ?")
-    .get(tokenHash) as DispositivoRow | undefined;
+export async function getDispositivoPorTokenHash(db: DbHandle, tokenHash: string): Promise<Dispositivo | null> {
+  const result = await db.execute({
+    sql: "SELECT id, nome, token_hash, ativo, criado_em FROM dispositivos WHERE token_hash = @tokenHash",
+    args: { tokenHash },
+  });
+  const row = result.rows[0] as unknown as DispositivoRow | undefined;
   return row ? toDomain(row) : null;
 }
 
-export function listDispositivos(db: Database.Database): Dispositivo[] {
-  const rows = db
-    .prepare("SELECT id, nome, token_hash, ativo, criado_em FROM dispositivos ORDER BY criado_em DESC")
-    .all() as DispositivoRow[];
-  return rows.map(toDomain);
+export async function listDispositivos(db: DbHandle): Promise<Dispositivo[]> {
+  const result = await db.execute("SELECT id, nome, token_hash, ativo, criado_em FROM dispositivos ORDER BY criado_em DESC");
+  return (result.rows as unknown as DispositivoRow[]).map(toDomain);
 }
 
-export function revogarDispositivo(db: Database.Database, id: string): void {
-  db.prepare("UPDATE dispositivos SET ativo = 0 WHERE id = ?").run(id);
+export async function revogarDispositivo(db: DbHandle, id: string): Promise<void> {
+  await db.execute({ sql: "UPDATE dispositivos SET ativo = 0 WHERE id = @id", args: { id } });
 }

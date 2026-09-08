@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
+import type { DbHandle } from "@/db/client";
 import { salvarSnapshot } from "@/repos/snapshots";
 import { coletarHtmlEstoque } from "@/worker/vendpago/scraper";
 import { parseEstoqueHtml } from "@/worker/vendpago/parser";
@@ -39,7 +39,7 @@ async function coletarComRetry(
 }
 
 export interface SincronizacaoDeps {
-  db: Database.Database;
+  db: DbHandle;
   coletarHtml?: () => Promise<string>;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -64,13 +64,13 @@ export async function executarSincronizacao(deps: SincronizacaoDeps): Promise<Sn
 
     const itens: SnapshotItem[] = linhas.map((linha) => ({ ...linha, snapshotId: id }));
     const snapshot: Snapshot = { id, status: "ok", criadoEm, erro: null };
-    salvarSnapshot(deps.db, snapshot, itens);
+    await salvarSnapshot(deps.db, snapshot, itens);
     logger.info("sync.ok", { snapshotId: id, itens: itens.length });
     return snapshot;
   } catch (err) {
     const mensagem = err instanceof Error ? err.message : String(err);
     const snapshot: Snapshot = { id, status: "falha", criadoEm, erro: mensagem };
-    salvarSnapshot(deps.db, snapshot, []);
+    await salvarSnapshot(deps.db, snapshot, []);
 
     if (err instanceof WriteAttemptError) {
       logger.error("erp.escrita.bloqueada", { snapshotId: id, erro: mensagem });

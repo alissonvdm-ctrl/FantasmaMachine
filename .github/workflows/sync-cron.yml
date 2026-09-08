@@ -1,0 +1,25 @@
+name: Sincronizar estoque do VendPago (3x/dia)
+
+# Substitui o node-cron standalone (Decision 7 do DESIGN): o Vercel Hobby só
+# permite Cron nativo 1x/dia, então o agendamento de 3x/dia (AT-005) roda
+# aqui, chamando o endpoint protegido /api/cron/sync.
+#
+# Configure em Settings > Secrets and variables > Actions:
+#   SYNC_URL     -> URL de produção do deploy (ex.: https://seu-app.vercel.app)
+#   CRON_SECRET  -> mesmo valor da variável de ambiente CRON_SECRET no Vercel
+
+on:
+  schedule:
+    - cron: "0 7,13,20 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar /api/cron/sync
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SYNC_URL }}/api/cron/sync"

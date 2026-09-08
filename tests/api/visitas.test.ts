@@ -18,17 +18,18 @@ function req(url: string, init?: ConstructorParameters<typeof NextRequest>[1]): 
   return new NextRequest(new URL(url, "http://localhost"), init);
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   const db = getDb();
-  applyMigrations(db);
-  db.prepare("INSERT INTO produtos (id, nome, ativo) VALUES ('coca', 'Coca-Cola', 1)").run();
-  db.prepare("INSERT INTO produtos (id, nome, ativo) VALUES ('guarana', 'Guaraná', 1)").run();
-  db.prepare(
+  await applyMigrations(db);
+  await db.execute("INSERT INTO produtos (id, nome, ativo) VALUES ('coca', 'Coca-Cola', 1)");
+  await db.execute("INSERT INTO produtos (id, nome, ativo) VALUES ('guarana', 'Guaraná', 1)");
+  await db.execute(
     "INSERT INTO molas (id, posicao, produto_atual_id, capacidade) VALUES ('A1', 'A1', 'coca', 10)",
-  ).run();
-  db.prepare(
-    "INSERT INTO dispositivos (id, nome, token_hash, ativo, criado_em) VALUES (?, 'Celular de teste', ?, 1, ?)",
-  ).run(DISPOSITIVO_ID, TOKEN_HASH, new Date().toISOString());
+  );
+  await db.execute({
+    sql: "INSERT INTO dispositivos (id, nome, token_hash, ativo, criado_em) VALUES (?, 'Celular de teste', ?, 1, ?)",
+    args: [DISPOSITIVO_ID, TOKEN_HASH, new Date().toISOString()],
+  });
 });
 
 describe("POST /api/visitas — autorização por token", () => {
@@ -173,9 +174,10 @@ describe("token não acessa visita de outro dispositivo", () => {
   it("token de outro dispositivo recebe 404 ao tentar registrar item", async () => {
     const outroHash = hashToken("outro-token");
     const db = getDb();
-    db.prepare(
-      "INSERT INTO dispositivos (id, nome, token_hash, ativo, criado_em) VALUES ('disp-2', 'Outro celular', ?, 1, ?)",
-    ).run(outroHash, new Date().toISOString());
+    await db.execute({
+      sql: "INSERT INTO dispositivos (id, nome, token_hash, ativo, criado_em) VALUES ('disp-2', 'Outro celular', ?, 1, ?)",
+      args: [outroHash, new Date().toISOString()],
+    });
 
     const abertura = await abrirVisitaRoute(
       req("/api/visitas", { method: "POST", headers: { "x-device-token": TOKEN } }),
@@ -195,13 +197,13 @@ describe("token não acessa visita de outro dispositivo", () => {
 
   it("dispositivo revogado recebe 401 ao tentar abrir visita", async () => {
     const db = getDb();
-    db.prepare("UPDATE dispositivos SET ativo = 0 WHERE id = ?").run(DISPOSITIVO_ID);
+    await db.execute({ sql: "UPDATE dispositivos SET ativo = 0 WHERE id = ?", args: [DISPOSITIVO_ID] });
 
     const res = await abrirVisitaRoute(
       req("/api/visitas", { method: "POST", headers: { "x-device-token": TOKEN } }),
     );
     expect(res.status).toBe(401);
 
-    db.prepare("UPDATE dispositivos SET ativo = 1 WHERE id = ?").run(DISPOSITIVO_ID);
+    await db.execute({ sql: "UPDATE dispositivos SET ativo = 1 WHERE id = ?", args: [DISPOSITIVO_ID] });
   });
 });

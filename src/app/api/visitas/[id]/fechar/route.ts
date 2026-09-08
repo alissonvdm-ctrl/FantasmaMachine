@@ -18,13 +18,13 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   }
 
   const db = getDb();
-  const dispositivo = validarTokenDispositivo(db, token);
+  const dispositivo = await validarTokenDispositivo(db, token);
   if (!dispositivo) {
     logger.warn("auth.device.denied", { tokenPrefix: token.slice(0, 8) });
     return NextResponse.json({ error: "Token inválido" }, { status: 401 });
   }
 
-  const visita = getVisita(db, params.id);
+  const visita = await getVisita(db, params.id);
   if (!visita || visita.dispositivoId !== dispositivo.id) {
     return NextResponse.json({ error: "Visita não encontrada" }, { status: 404 });
   }
@@ -39,24 +39,27 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     throw err;
   }
 
-  const itens = listItensDaVisita(db, visita.id);
-  const molas = listMolas(db);
+  const itens = await listItensDaVisita(db, visita.id);
+  const molas = await listMolas(db);
 
   // Calcula o roteiro antes de qualquer escrita: se falhar (ex.: mola ausente
   // do planograma), a visita permanece 'aberta' e o abastecedor pode retentar,
   // em vez de ficar presa em 'fechada' sem um roteiro correspondente.
   const roteiro = gerarRoteiro(itens, molas);
 
-  const persistirFechamento = db.transaction(() => {
-    atualizarStatusVisita(db, fechada);
+  const tx = await db.transaction("write");
+  try {
+    await atualizarStatusVisita(tx, fechada);
     // Planograma reflete a troca somente no fechamento (Decision 5 do DESIGN).
     for (const item of itens) {
       if (item.produtoNovoId) {
-        atualizarProdutoAtual(db, item.molaId, item.produtoNovoId);
+        await atualizarProdutoAtual(tx, item.molaId, item.produtoNovoId);
       }
     }
-  });
-  persistirFechamento();
+    await tx.commit();
+  } finally {
+    tx.close();
+  }
 
   return NextResponse.json({ visita: fechada, roteiro }, { status: 200 });
 }

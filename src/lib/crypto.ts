@@ -61,3 +61,11 @@ export function hashesMatch(a: string, b: string): boolean {
   if (bufA.length !== bufB.length) return false;
   return timingSafeEqual(bufA, bufB);
 }
+
+/** Comparação em tempo constante entre dois segredos em texto puro (ex.: CRON_SECRET). */
+export function secretsMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}

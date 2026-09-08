@@ -15,20 +15,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const db = getDb();
-  const dispositivo = validarTokenDispositivo(db, token);
+  const dispositivo = await validarTokenDispositivo(db, token);
   if (!dispositivo) {
     logger.warn("auth.device.denied", { tokenPrefix: token.slice(0, 8) });
     return NextResponse.json({ error: "Token inválido" }, { status: 401 });
   }
 
   const visita = abrirVisita(randomUUID(), dispositivo.id, new Date().toISOString());
-  criarVisita(db, visita);
+  await criarVisita(db, visita);
 
   return NextResponse.json(
     {
       visita,
-      molas: listMolas(db),
-      produtos: listProdutosAtivos(db),
+      molas: await listMolas(db),
+      produtos: await listProdutosAtivos(db),
     },
     { status: 201 },
   );

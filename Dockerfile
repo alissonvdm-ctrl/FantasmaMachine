@@ -13,7 +13,9 @@ RUN npm install
 
 COPY . .
 
-RUN npx playwright install --with-deps chromium
+# @sparticuz/chromium já traz o binário do Chromium compactado no pacote
+# (Decision 7 do DESIGN); as libs do apt acima cobrem as dependências
+# compartilhadas necessárias para executá-lo.
 RUN npm run build
 
 ENV NODE_ENV=production

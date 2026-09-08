@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    serverComponentsExternalPackages: ["better-sqlite3"],
+    serverComponentsExternalPackages: ["@libsql/client", "playwright-core", "@sparticuz/chromium"],
   },
   async headers() {
     return [

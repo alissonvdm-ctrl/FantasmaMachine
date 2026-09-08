@@ -9,15 +9,15 @@ interface PageProps {
   params: { token: string };
 }
 
-export default function VisitaPage({ params }: PageProps) {
+export default async function VisitaPage({ params }: PageProps): Promise<JSX.Element> {
   const db = getDb();
-  const dispositivo = validarTokenDispositivo(db, params.token);
+  const dispositivo = await validarTokenDispositivo(db, params.token);
   if (!dispositivo) {
     notFound();
   }
 
-  const molas = listMolas(db);
-  const produtos = listProdutosAtivos(db);
+  const molas = await listMolas(db);
+  const produtos = await listProdutosAtivos(db);
 
   return (
     <PlanogramaClient

@@ -1,9 +1,9 @@
 import argon2 from "argon2";
-import type Database from "better-sqlite3";
 import { createHmac } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
+import type { DbHandle } from "@/db/client";
 import { config } from "@/lib/config";
 import { hashToken, hashesMatch } from "@/lib/crypto";
 import { getDispositivoPorTokenHash } from "@/repos/dispositivos";
@@ -16,9 +16,9 @@ const ADMIN_SESSION_PAYLOAD = "admin";
  * Valida um token de dispositivo vindo da URL. Escopo restrito: só devolve o
  * dispositivo se o hash bater e ele estiver ativo; nunca dá acesso a /admin.
  */
-export function validarTokenDispositivo(db: Database.Database, token: string): Dispositivo | null {
+export async function validarTokenDispositivo(db: DbHandle, token: string): Promise<Dispositivo | null> {
   const hash = hashToken(token);
-  const dispositivo = getDispositivoPorTokenHash(db, hash);
+  const dispositivo = await getDispositivoPorTokenHash(db, hash);
   if (!dispositivo || !dispositivo.ativo) return null;
   if (!hashesMatch(dispositivo.tokenHash, hash)) return null;
   return dispositivo;

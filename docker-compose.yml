@@ -10,14 +10,11 @@ services:
       - data:/app/data
     restart: unless-stopped
 
-  worker:
-    build: .
-    command: ["npm", "run", "worker"]
-    env_file:
-      - .env
-    volumes:
-      - data:/app/data
-    restart: unless-stopped
+# A sincronização (Decision 7 do DESIGN) não é mais um processo separado:
+# é o endpoint POST /api/cron/sync, protegido por CRON_SECRET. Agende-o com
+# o crontab do host ou o mesmo workflow do GitHub Actions usado no Vercel:
+#   0 7,13,20 * * * curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+#     http://localhost:3000/api/cron/sync
 
 volumes:
   data:

@@ -6,9 +6,10 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     env: {
-      DATABASE_PATH: ":memory:",
+      DATABASE_URL: ":memory:",
       ADMIN_PASSWORD_HASH: "$argon2id$v=19$m=16,t=2,p=1$dGVzdHNhbHQ$dGVzdGhhc2h2YWx1ZQ",
       SESSION_SECRET: "test-session-secret-not-for-production",
+      CRON_SECRET: "test-cron-secret-not-for-production",
       VENDPAGO_HOST: "www.erpvending.com.br",
     },
   },

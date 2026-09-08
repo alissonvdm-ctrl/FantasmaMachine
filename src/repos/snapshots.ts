@@ -1,4 +1,5 @@
-import type Database from "better-sqlite3";
+import type { InStatement } from "@libsql/client";
+import type { DbHandle } from "@/db/client";
 import type { Snapshot, SnapshotItem } from "@/domain/types";
 
 interface SnapshotRow {
@@ -24,43 +25,43 @@ function itemToDomain(row: SnapshotItemRow): SnapshotItem {
     snapshotId: row.snapshot_id,
     molaCodigo: row.mola_codigo,
     produtoCodigo: row.produto_codigo,
-    quantidade: row.quantidade,
+    quantidade: Number(row.quantidade),
   };
 }
 
-/** Persiste um snapshot (ok ou falha). Falha nunca descarta o snapshot ok anterior. */
-export function salvarSnapshot(
-  db: Database.Database,
+/** Persiste um snapshot (ok ou falha) e seus itens atomicamente. Falha nunca descarta o snapshot ok anterior. */
+export async function salvarSnapshot(
+  db: DbHandle,
   snapshot: Snapshot,
   itens: readonly SnapshotItem[],
-): void {
-  const insertSnapshot = db.prepare(
-    "INSERT INTO snapshots (id, status, criado_em, erro) VALUES (@id, @status, @criadoEm, @erro)",
-  );
-  const insertItem = db.prepare(
-    `INSERT INTO snapshot_itens (snapshot_id, mola_codigo, produto_codigo, quantidade)
-     VALUES (@snapshotId, @molaCodigo, @produtoCodigo, @quantidade)`,
-  );
+): Promise<void> {
+  const statements: InStatement[] = [
+    {
+      sql: "INSERT INTO snapshots (id, status, criado_em, erro) VALUES (@id, @status, @criadoEm, @erro)",
+      args: { ...snapshot },
+    },
+    ...itens.map((item) => ({
+      sql: `INSERT INTO snapshot_itens (snapshot_id, mola_codigo, produto_codigo, quantidade)
+            VALUES (@snapshotId, @molaCodigo, @produtoCodigo, @quantidade)`,
+      args: { ...item },
+    })),
+  ];
 
-  const tx = db.transaction(() => {
-    insertSnapshot.run(snapshot);
-    for (const item of itens) insertItem.run(item);
-  });
-  tx();
+  await db.batch(statements);
 }
 
-export function getUltimoSnapshotOk(db: Database.Database): Snapshot | null {
-  const row = db
-    .prepare("SELECT id, status, criado_em, erro FROM snapshots WHERE status = 'ok' ORDER BY criado_em DESC LIMIT 1")
-    .get() as SnapshotRow | undefined;
+export async function getUltimoSnapshotOk(db: DbHandle): Promise<Snapshot | null> {
+  const result = await db.execute(
+    "SELECT id, status, criado_em, erro FROM snapshots WHERE status = 'ok' ORDER BY criado_em DESC LIMIT 1",
+  );
+  const row = result.rows[0] as unknown as SnapshotRow | undefined;
   return row ? snapshotToDomain(row) : null;
 }
 
-export function getItensDoSnapshot(db: Database.Database, snapshotId: string): SnapshotItem[] {
-  const rows = db
-    .prepare(
-      "SELECT snapshot_id, mola_codigo, produto_codigo, quantidade FROM snapshot_itens WHERE snapshot_id = ?",
-    )
-    .all(snapshotId) as SnapshotItemRow[];
-  return rows.map(itemToDomain);
+export async function getItensDoSnapshot(db: DbHandle, snapshotId: string): Promise<SnapshotItem[]> {
+  const result = await db.execute({
+    sql: "SELECT snapshot_id, mola_codigo, produto_codigo, quantidade FROM snapshot_itens WHERE snapshot_id = @snapshotId",
+    args: { snapshotId },
+  });
+  return (result.rows as unknown as SnapshotItemRow[]).map(itemToDomain);
 }

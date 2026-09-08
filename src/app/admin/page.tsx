@@ -32,7 +32,7 @@ async function login(formData: FormData): Promise<void> {
   redirect("/admin");
 }
 
-export default function AdminPage({ searchParams }: PageProps): JSX.Element {
+export default async function AdminPage({ searchParams }: PageProps): Promise<JSX.Element> {
   const sessionValue = cookies().get(ADMIN_SESSION_COOKIE)?.value;
   const autenticado = verifyAdminSessionValue(sessionValue);
 
@@ -53,12 +53,12 @@ export default function AdminPage({ searchParams }: PageProps): JSX.Element {
   }
 
   const db = getDb();
-  const molas = listMolas(db);
-  const snapshot = getUltimoSnapshotOk(db);
-  const snapshotItens = snapshot ? getItensDoSnapshot(db, snapshot.id) : [];
-  const itensPendentes = listItensPendentes(db);
+  const molas = await listMolas(db);
+  const snapshot = await getUltimoSnapshotOk(db);
+  const snapshotItens = snapshot ? await getItensDoSnapshot(db, snapshot.id) : [];
+  const itensPendentes = await listItensPendentes(db);
   const view = montarVisaoEstoque(molas, snapshotItens, itensPendentes, snapshot?.criadoEm ?? null);
-  const produtosPorId = new Map(listProdutos(db).map((p) => [p.id, p]));
+  const produtosPorId = new Map((await listProdutos(db)).map((p) => [p.id, p]));
 
   const idadeTexto = view.ultimaSincronizacaoOk
     ? new Date(view.ultimaSincronizacaoOk).toLocaleString("pt-BR")

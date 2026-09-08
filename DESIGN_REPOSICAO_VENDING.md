@@ -219,6 +219,34 @@
 - Trocar a senha exige redeploy da variável de ambiente.
 - Se A-006 for falsa, exige revisão para multiusuário.
 
+### Decision 7: Deploy em Vercel com Turso (libSQL) e sincronização acionada por HTTP
+
+| Attribute | Value |
+|---|---|
+| **Status** | Accepted (supersede parcial da Decision 1) |
+| **Date** | 2026-09-08 |
+| **Source** | Decisão explícita do usuário, pós-Build |
+
+**Context:** O Build inicial (v1.0) assumiu VPS/container com processo Node de vida longa (`node-cron`) e SQLite em arquivo local (`better-sqlite3`), conforme Decision 1 e Decision 3. O usuário pediu deploy em Vercel, que é serverless: não há disco persistente entre invocações de função, não há processo de longa duração, e o pacote de função tem limite de tamanho incompatível com o Chromium completo do Playwright.
+
+**Choice:**
+1. Substituir `better-sqlite3` por `@libsql/client`, apontando para um banco Turso (libSQL hospedado, SQL compatível com SQLite — mesmo `schema.sql`, mesmas queries com parâmetros nomeados). Localmente e em teste, o mesmo cliente aponta para `:memory:` ou um arquivo `file:`.
+2. Substituir `playwright` (que baixa um Chromium completo) por `playwright-core` + `@sparticuz/chromium` (binário Linux x64 compacto, compatível com ambiente serverless e com container comum).
+3. Substituir o processo `node-cron` standalone (`src/worker/index.ts`) por um endpoint HTTP protegido por segredo (`/api/cron/sync`), acionado externamente. Como o plano Vercel do usuário é Hobby (Cron nativo limitado a 1x/dia, incompatível com a exigência de 3x/dia do DEFINE/AT-005), o agendamento 3x/dia é feito por um workflow do GitHub Actions que chama o endpoint com o segredo — funciona independente do plano Vercel.
+
+**Rationale:** Mantém a lógica de domínio, o schema e os testes praticamente intactos (libSQL é SQL-compatível com SQLite); resolve as três incompatibilidades reais com serverless (disco, processo longo, tamanho do binário do Chromium) sem reescrever a aplicação.
+
+**Alternatives Rejected:**
+1. Vercel Postgres — exigiria reescrever todo o SQL dos repositories (sintaxe/tipos diferentes de SQLite), contrariando a Decision 3 original sem necessidade.
+2. Manter `node-cron` num processo separado sempre ativo — inviável em Vercel (sem processo de longa duração).
+3. Depender só do Vercel Cron nativo — não atende ao AT-005 (3x/dia) no plano Hobby do usuário.
+
+**Consequences:**
+- Toda a camada de dados passa a ser assíncrona (Client/Transaction do libSQL), com impacto em todos os repositories, rotas de API, Server Components e testes que tocam o banco.
+- Depender de disponibilidade e latência de rede até o Turso (antes era leitura/escrita local em arquivo).
+- Dois segredos adicionais em produção: `DATABASE_AUTH_TOKEN` (Turso) e `CRON_SECRET` (protege o endpoint de sincronização).
+- O caminho de deploy self-hosted (Docker/VPS) documentado no README continua funcional: o container roda só a app (sem processo worker separado) e qualquer agendador externo (crontab do host, GitHub Actions) pode chamar o mesmo `/api/cron/sync`.
+
 ---
 
 ## File Manifest
@@ -266,7 +294,7 @@
 | 39 | `src/worker/vendpago/scraper.ts` | Create | Login e navegação até a tela de estoque | (general) | 11, 38, 9 |
 | 40 | `src/worker/vendpago/parser.ts` | Create | Extração de mola, produto e quantidade | (general) | 15 |
 | 41 | `src/worker/sync.ts` | Create | Orquestra scrape, parse e persistência do snapshot | (general) | 22, 39, 40 |
-| 42 | `src/worker/index.ts` | Create | Agendamento node-cron 3x ao dia | (general) | 41, 9 |
+| 42 | ~~`src/worker/index.ts`~~ | Removed (Decision 7) | Substituído pelo item 53 (endpoint HTTP) — Vercel não suporta processo de longa duração | (general) | — |
 | 43 | `public/manifest.webmanifest` | Create | Instalação como PWA no celular | (general) | None |
 | 44 | `tests/domain/roteiro.test.ts` | Create | AT-001, AT-002, AT-008 | (general) | 16 |
 | 45 | `tests/domain/estoque.test.ts` | Create | AT-003 | (general) | 17 |
@@ -277,8 +305,15 @@
 | 50 | `tests/lib/offlineBuffer.test.ts` | Create | AT-009 | (general) | 25 |
 | 51 | `tests/api/visitas.test.ts` | Create | Contratos HTTP e autorização por token | (general) | 33, 34, 35 |
 | 52 | `tests/fixtures/vendpago-estoque.html` | Create | HTML real capturado para o parser | (general) | None |
+| 53 | `src/app/api/cron/sync/route.ts` | Create (Decision 7) | Endpoint HTTP protegido por `CRON_SECRET` que aciona `executarSincronizacao`; substitui o item 42 | (general) | 41, 9 |
+| 54 | `.github/workflows/sync-cron.yml` | Create (Decision 7) | Aciona o item 53 três vezes ao dia (AT-005), independente do plano Vercel | (general) | 53 |
+| 55 | `vercel.json` | Create (Decision 7) | Cron nativo do Vercel como caminho alternativo (1x/dia no plano Hobby); mantém a rota documentada mesmo se o time migrar de plano | (general) | 53 |
 
-**Total Files:** 52
+**Total Files:** 55 (52 originais − 1 removido + 3 adicionados pela Decision 7)
+
+### Impacto retroativo da Decision 7 no manifesto original
+
+A troca de `better-sqlite3` (síncrono) por `@libsql/client` (assíncrono) exigiu revisar a implementação — não o propósito — dos itens 13, 14, 19–23, 24, 33–37, 27, 29–32, 41, 44–46, 49, 51 (toda a cadeia que toca o banco passou a usar `Promise`/`await`). Nenhum contrato de domínio (itens 15–18) mudou.
 
 ### Agent Assignment Rationale
 
@@ -479,16 +514,19 @@ export const config = {
 
 | Config Key | Type | Source / Default | Sensitive? | Description |
 |---|---|---|---|---|
-| `DATABASE_PATH` | string | env / `./data/app.db` | No | Arquivo SQLite compartilhado entre app e worker |
+| `DATABASE_URL` | string | env / `:memory:` (dev/test) | No | URL do libSQL: `libsql://<db>.turso.io` em produção, `file:./data/app.db` em VPS/self-host, `:memory:` em teste (Decision 7) |
+| `DATABASE_AUTH_TOKEN` | string | env, obrigatório em produção com Turso | Yes | Token de autenticação do banco Turso (Decision 7) |
+| `CRON_SECRET` | string | env, obrigatório | Yes | Segredo que autoriza `POST /api/cron/sync`; comparado ao header `Authorization: Bearer <CRON_SECRET>` (Decision 7) |
 | `VENDPAGO_HOST` | string | env / `www.erpvending.com.br` | No | Host autorizado no ReadOnly Guard |
 | `VENDPAGO_USER` | string | env, obrigatório | Yes | Usuário de leitura no ERP |
 | `VENDPAGO_PASSWORD_ENC` | string | env, obrigatório | Yes | Senha cifrada em AES-256-GCM |
 | `ENCRYPTION_KEY` | string | env, obrigatório | Yes | Chave de decifragem da credencial |
 | `ADMIN_PASSWORD_HASH` | string | env, obrigatório | Yes | Hash Argon2 da senha de administração |
 | `SESSION_SECRET` | string | env, obrigatório | Yes | Assinatura do cookie de sessão |
-| `SYNC_CRON` | string | env / `0 7,13,20 * * *` | No | Agendamento das três sincronizações diárias |
 | `PLAYWRIGHT_TIMEOUT_MS` | number | env / `45000` | No | Timeout de navegação |
 | `LOG_LEVEL` | string | env / `info` | No | Nível de log estruturado |
+
+> `SYNC_CRON` (agendamento node-cron) foi removido — o agendamento 3x/dia passou a ser externo (GitHub Actions / Vercel Cron), ver Decision 7.
 
 ---
 

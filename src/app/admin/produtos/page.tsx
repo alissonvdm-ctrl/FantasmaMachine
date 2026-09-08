@@ -9,7 +9,7 @@ async function adicionarProduto(formData: FormData): Promise<void> {
   const nome = formData.get("nome");
   if (typeof id !== "string" || typeof nome !== "string" || !id.trim() || !nome.trim()) return;
   const db = getDb();
-  criarProduto(db, { id: id.trim(), nome: nome.trim() });
+  await criarProduto(db, { id: id.trim(), nome: nome.trim() });
   revalidatePath("/admin/produtos");
 }
 
@@ -19,14 +19,14 @@ async function alternarAtivo(formData: FormData): Promise<void> {
   const ativo = formData.get("ativo");
   if (typeof id !== "string") return;
   const db = getDb();
-  atualizarProduto(db, id, { ativo: ativo === "1" });
+  await atualizarProduto(db, id, { ativo: ativo === "1" });
   revalidatePath("/admin/produtos");
 }
 
-export default function ProdutosPage(): JSX.Element {
+export default async function ProdutosPage(): Promise<JSX.Element> {
   requireAdminSession();
   const db = getDb();
-  const produtos = listProdutos(db);
+  const produtos = await listProdutos(db);
 
   return (
     <main className="page">

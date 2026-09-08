@@ -1,19 +1,17 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { createClient, type Client, type Transaction } from "@libsql/client";
 import { config } from "@/lib/config";
 
-let instance: Database.Database | null = null;
+/** Repos aceitam Client ou Transaction — ambos expõem o mesmo `execute()`. */
+export type DbHandle = Client | Transaction;
 
-export function getDb(): Database.Database {
+let instance: Client | null = null;
+
+export function getDb(): Client {
   if (instance) return instance;
 
-  const dir = dirname(config.databasePath);
-  if (dir && dir !== ".") mkdirSync(dir, { recursive: true });
-
-  const db = new Database(config.databasePath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  instance = db;
-  return db;
+  instance = createClient({
+    url: config.databaseUrl,
+    authToken: config.databaseAuthToken,
+  });
+  return instance;
 }

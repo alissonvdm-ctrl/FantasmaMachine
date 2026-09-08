@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyMigrations } from "@/db/migrate";
 import { executarSincronizacao } from "@/worker/sync";
@@ -11,11 +11,11 @@ const HTML_OK = `
 </tbody></table>`;
 
 describe("executarSincronizacao", () => {
-  let db: Database.Database;
+  let db: Client;
 
-  beforeEach(() => {
-    db = new Database(":memory:");
-    applyMigrations(db);
+  beforeEach(async () => {
+    db = createClient({ url: ":memory:" });
+    await applyMigrations(db);
   });
 
   afterEach(() => {
@@ -26,7 +26,7 @@ describe("executarSincronizacao", () => {
     const snapshot = await executarSincronizacao({ db, coletarHtml: async () => HTML_OK });
 
     expect(snapshot.status).toBe("ok");
-    const ultimo = getUltimoSnapshotOk(db);
+    const ultimo = await getUltimoSnapshotOk(db);
     expect(ultimo?.id).toBe(snapshot.id);
   });
 
@@ -42,7 +42,7 @@ describe("executarSincronizacao", () => {
     });
 
     expect(falhou.status).toBe("falha");
-    const ultimoOk = getUltimoSnapshotOk(db);
+    const ultimoOk = await getUltimoSnapshotOk(db);
     expect(ultimoOk?.id).toBe(ok.id);
     expect(ultimoOk?.criadoEm).toBe(ok.criadoEm);
   });
@@ -94,6 +94,6 @@ describe("executarSincronizacao", () => {
     });
 
     expect(snapshot.status).toBe("falha");
-    expect(getUltimoSnapshotOk(db)).toBeNull();
+    expect(await getUltimoSnapshotOk(db)).toBeNull();
   });
 });

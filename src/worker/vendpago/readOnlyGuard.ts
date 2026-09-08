@@ -1,4 +1,4 @@
-import type { BrowserContext } from "playwright";
+import type { BrowserContext } from "playwright-core";
 
 export class WriteAttemptError extends Error {
   constructor(method: string, url: string) {

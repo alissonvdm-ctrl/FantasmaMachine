@@ -5,19 +5,20 @@ function required(key: string): string {
 }
 
 export const config = {
-  databasePath: process.env.DATABASE_PATH ?? "./data/app.db",
+  databaseUrl: process.env.DATABASE_URL ?? "file:./data/app.db",
+  databaseAuthToken: process.env.DATABASE_AUTH_TOKEN,
   erpHost: process.env.VENDPAGO_HOST ?? "www.erpvending.com.br",
   adminPasswordHash: required("ADMIN_PASSWORD_HASH"),
   sessionSecret: required("SESSION_SECRET"),
-  syncCron: process.env.SYNC_CRON ?? "0 7,13,20 * * *",
+  cronSecret: required("CRON_SECRET"),
   playwrightTimeoutMs: Number(process.env.PLAYWRIGHT_TIMEOUT_MS ?? 45000),
   logLevel: process.env.LOG_LEVEL ?? "info",
 } as const;
 
 /**
- * A credencial do VendPago só é lida pelo processo worker (Security Considerations
- * do DESIGN: "ausente do processo web"). Por isso não integra `config` acima —
- * ficaria exigida eagerly em todo import, inclusive no processo web.
+ * A credencial do VendPago só é lida pela rota de sincronização (Security
+ * Considerations do DESIGN: "ausente do processo web" em geral). Por isso
+ * não integra `config` acima — ficaria exigida eagerly em todo import.
  */
 export interface ErpCredentials {
   erpUser: string;

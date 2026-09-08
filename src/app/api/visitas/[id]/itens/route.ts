@@ -24,13 +24,13 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   }
 
   const db = getDb();
-  const dispositivo = validarTokenDispositivo(db, token);
+  const dispositivo = await validarTokenDispositivo(db, token);
   if (!dispositivo) {
     logger.warn("auth.device.denied", { tokenPrefix: token.slice(0, 8) });
     return NextResponse.json({ error: "Token inválido" }, { status: 401 });
   }
 
-  const visita = getVisita(db, params.id);
+  const visita = await getVisita(db, params.id);
   if (!visita || visita.dispositivoId !== dispositivo.id) {
     return NextResponse.json({ error: "Visita não encontrada" }, { status: 404 });
   }
@@ -51,12 +51,12 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     throw err;
   }
 
-  const mola = getMola(db, body.molaId);
+  const mola = await getMola(db, body.molaId);
   if (!mola) {
     return NextResponse.json({ error: "Mola não encontrada" }, { status: 404 });
   }
 
-  const produtosAtivos = new Set(listProdutosAtivos(db).map((p) => p.id));
+  const produtosAtivos = new Set((await listProdutosAtivos(db)).map((p) => p.id));
   const input = {
     visitaId: visita.id,
     molaId: mola.id,
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     throw err;
   }
 
-  upsertItem(db, input);
+  await upsertItem(db, input);
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }

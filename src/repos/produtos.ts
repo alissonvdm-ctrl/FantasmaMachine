@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { DbHandle } from "@/db/client";
 import type { Produto } from "@/domain/types";
 
 interface ProdutoRow {
@@ -11,38 +11,44 @@ function toDomain(row: ProdutoRow): Produto {
   return { id: row.id, nome: row.nome, ativo: row.ativo === 1 };
 }
 
-export function listProdutos(db: Database.Database): Produto[] {
-  const rows = db.prepare("SELECT id, nome, ativo FROM produtos ORDER BY nome").all() as ProdutoRow[];
-  return rows.map(toDomain);
+export async function listProdutos(db: DbHandle): Promise<Produto[]> {
+  const result = await db.execute("SELECT id, nome, ativo FROM produtos ORDER BY nome");
+  return (result.rows as unknown as ProdutoRow[]).map(toDomain);
 }
 
-export function listProdutosAtivos(db: Database.Database): Produto[] {
-  const rows = db
-    .prepare("SELECT id, nome, ativo FROM produtos WHERE ativo = 1 ORDER BY nome")
-    .all() as ProdutoRow[];
-  return rows.map(toDomain);
+export async function listProdutosAtivos(db: DbHandle): Promise<Produto[]> {
+  const result = await db.execute("SELECT id, nome, ativo FROM produtos WHERE ativo = 1 ORDER BY nome");
+  return (result.rows as unknown as ProdutoRow[]).map(toDomain);
 }
 
-export function getProduto(db: Database.Database, id: string): Produto | null {
-  const row = db.prepare("SELECT id, nome, ativo FROM produtos WHERE id = ?").get(id) as
-    | ProdutoRow
-    | undefined;
+export async function getProduto(db: DbHandle, id: string): Promise<Produto | null> {
+  const result = await db.execute({
+    sql: "SELECT id, nome, ativo FROM produtos WHERE id = @id",
+    args: { id },
+  });
+  const row = result.rows[0] as unknown as ProdutoRow | undefined;
   return row ? toDomain(row) : null;
 }
 
-export function criarProduto(db: Database.Database, input: { id: string; nome: string }): void {
-  db.prepare("INSERT INTO produtos (id, nome, ativo) VALUES (@id, @nome, 1)").run(input);
+export async function criarProduto(db: DbHandle, input: { id: string; nome: string }): Promise<void> {
+  await db.execute({
+    sql: "INSERT INTO produtos (id, nome, ativo) VALUES (@id, @nome, 1)",
+    args: input,
+  });
 }
 
-export function atualizarProduto(
-  db: Database.Database,
+export async function atualizarProduto(
+  db: DbHandle,
   id: string,
   changes: { nome?: string; ativo?: boolean },
-): void {
+): Promise<void> {
   if (changes.nome !== undefined) {
-    db.prepare("UPDATE produtos SET nome = ? WHERE id = ?").run(changes.nome, id);
+    await db.execute({ sql: "UPDATE produtos SET nome = @nome WHERE id = @id", args: { nome: changes.nome, id } });
   }
   if (changes.ativo !== undefined) {
-    db.prepare("UPDATE produtos SET ativo = ? WHERE id = ?").run(changes.ativo ? 1 : 0, id);
+    await db.execute({
+      sql: "UPDATE produtos SET ativo = @ativo WHERE id = @id",
+      args: { ativo: changes.ativo ? 1 : 0, id },
+    });
   }
 }

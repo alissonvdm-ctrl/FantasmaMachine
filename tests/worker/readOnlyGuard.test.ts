@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { applyReadOnlyGuard } from "@/worker/vendpago/readOnlyGuard";
-import type { BrowserContext } from "playwright";
+import type { BrowserContext } from "playwright-core";
 
 function createFakeRoute(method: string, url: string) {
   const request = { method: () => method, url: () => url };

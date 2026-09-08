@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { applyMigrations } from "@/db/migrate";
 import {
@@ -79,21 +79,20 @@ describe("validarItem", () => {
 });
 
 describe("upsertItem — idempotência (repo)", () => {
-  let db: Database.Database;
+  let db: Client;
 
-  beforeEach(() => {
-    db = new Database(":memory:");
-    db.pragma("foreign_keys = ON");
-    applyMigrations(db);
-    db.prepare("INSERT INTO produtos (id, nome, ativo) VALUES ('coca', 'Coca-Cola', 1)").run();
-    db.prepare("INSERT INTO produtos (id, nome, ativo) VALUES ('guarana', 'Guaraná', 1)").run();
-    db.prepare(
+  beforeEach(async () => {
+    db = createClient({ url: ":memory:" });
+    await applyMigrations(db);
+    await db.execute("INSERT INTO produtos (id, nome, ativo) VALUES ('coca', 'Coca-Cola', 1)");
+    await db.execute("INSERT INTO produtos (id, nome, ativo) VALUES ('guarana', 'Guaraná', 1)");
+    await db.execute(
       "INSERT INTO molas (id, posicao, produto_atual_id, capacidade) VALUES ('A1', 'A1', 'coca', 10)",
-    ).run();
-    db.prepare(
+    );
+    await db.execute(
       "INSERT INTO dispositivos (id, nome, token_hash, ativo, criado_em) VALUES ('d1', 'Celular', 'hash', 1, 't0')",
-    ).run();
-    criarVisita(db, {
+    );
+    await criarVisita(db, {
       id: "v1",
       dispositivoId: "d1",
       status: "aberta",
@@ -103,27 +102,27 @@ describe("upsertItem — idempotência (repo)", () => {
     });
   });
 
-  it("reenvio do mesmo item resulta no mesmo estado final (buffer offline, AT-009)", () => {
-    upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 3, produtoNovoId: null });
-    upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 3, produtoNovoId: null });
+  it("reenvio do mesmo item resulta no mesmo estado final (buffer offline, AT-009)", async () => {
+    await upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 3, produtoNovoId: null });
+    await upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 3, produtoNovoId: null });
 
-    const itens = listItensDaVisita(db, "v1");
+    const itens = await listItensDaVisita(db, "v1");
     expect(itens).toHaveLength(1);
     expect(itens[0]?.quantidadeInserida).toBe(3);
   });
 
-  it("um novo upsert sobrescreve o valor anterior para a mesma mola", () => {
-    upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 3, produtoNovoId: null });
-    upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 7, produtoNovoId: "guarana" });
+  it("um novo upsert sobrescreve o valor anterior para a mesma mola", async () => {
+    await upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 3, produtoNovoId: null });
+    await upsertItem(db, { visitaId: "v1", molaId: "A1", quantidadeInserida: 7, produtoNovoId: "guarana" });
 
-    const itens = listItensDaVisita(db, "v1");
+    const itens = await listItensDaVisita(db, "v1");
     expect(itens).toHaveLength(1);
     expect(itens[0]?.quantidadeInserida).toBe(7);
     expect(itens[0]?.produtoNovoId).toBe("guarana");
   });
 
-  it("getVisita devolve a visita recém-criada", () => {
-    const visita = getVisita(db, "v1");
+  it("getVisita devolve a visita recém-criada", async () => {
+    const visita = await getVisita(db, "v1");
     expect(visita?.status).toBe("aberta");
   });
 });

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   }
 
   const db = getDb();
-  const visita = getVisita(db, params.id);
+  const visita = await getVisita(db, params.id);
   if (!visita) {
     return NextResponse.json({ error: "Visita não encontrada" }, { status: 404 });
   }
@@ -29,6 +29,6 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     throw err;
   }
 
-  atualizarStatusVisita(db, digitada);
+  await atualizarStatusVisita(db, digitada);
   return NextResponse.json({ visita: digitada }, { status: 200 });
 }

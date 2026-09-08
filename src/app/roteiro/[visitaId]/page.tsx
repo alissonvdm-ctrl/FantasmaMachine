@@ -18,24 +18,24 @@ async function marcarComoDigitada(formData: FormData): Promise<void> {
   if (typeof visitaId !== "string") return;
 
   const db = getDb();
-  const visita = getVisita(db, visitaId);
+  const visita = await getVisita(db, visitaId);
   if (!visita || visita.status !== "fechada") return;
 
   const digitada = marcarDigitada(visita, new Date().toISOString());
-  atualizarStatusVisita(db, digitada);
+  await atualizarStatusVisita(db, digitada);
   revalidatePath(`/roteiro/${visitaId}`);
 }
 
-export default function RoteiroPage({ params }: PageProps): JSX.Element {
+export default async function RoteiroPage({ params }: PageProps): Promise<JSX.Element> {
   requireAdminSession();
 
   const db = getDb();
-  const visita = getVisita(db, params.visitaId);
+  const visita = await getVisita(db, params.visitaId);
   if (!visita) notFound();
 
-  const itens = listItensDaVisita(db, visita.id);
-  const molas = listMolas(db);
-  const produtosPorId = new Map(listProdutos(db).map((p) => [p.id, p]));
+  const itens = await listItensDaVisita(db, visita.id);
+  const molas = await listMolas(db);
+  const produtosPorId = new Map((await listProdutos(db)).map((p) => [p.id, p]));
   const roteiro = gerarRoteiro(itens, molas);
 
   return (

@@ -25,7 +25,7 @@ async function salvarMola(formData: FormData): Promise<void> {
   if (!Number.isInteger(capacidadeNum) || capacidadeNum <= 0) return;
 
   const db = getDb();
-  upsertMola(db, {
+  await upsertMola(db, {
     id: id.trim(),
     posicao: posicao.trim(),
     produtoAtualId: produtoAtualId.trim(),
@@ -34,11 +34,11 @@ async function salvarMola(formData: FormData): Promise<void> {
   revalidatePath("/admin/planograma");
 }
 
-export default function PlanogramaPage(): JSX.Element {
+export default async function PlanogramaPage(): Promise<JSX.Element> {
   requireAdminSession();
   const db = getDb();
-  const molas = listMolas(db);
-  const produtos = listProdutosAtivos(db);
+  const molas = await listMolas(db);
+  const produtos = await listProdutosAtivos(db);
 
   return (
     <main className="page">

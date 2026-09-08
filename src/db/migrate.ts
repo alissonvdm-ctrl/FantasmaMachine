@@ -1,14 +1,14 @@
-import type Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { DbHandle } from "@/db/client";
 import { getDb } from "@/db/client";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export function applyMigrations(db: Database.Database): void {
+export async function applyMigrations(db: DbHandle): Promise<void> {
   const schema = readFileSync(join(__dirname, "schema.sql"), "utf8");
-  db.exec(schema);
+  await db.executeMultiple(schema);
 }
 
 function isMainModule(): boolean {
@@ -17,6 +17,6 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
-  applyMigrations(getDb());
+  await applyMigrations(getDb());
   console.log("Migrations aplicadas.");
 }
