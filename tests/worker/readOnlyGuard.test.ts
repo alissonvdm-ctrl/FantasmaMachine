@@ -91,9 +91,12 @@ describe("applyReadOnlyGuard (AT-004)", () => {
     expect(guard.getBlockedAttempt()).not.toBeNull();
   });
 
-  it("permite POST em tela de listagem (padrão DataTables) quando o padrão é liberado", async () => {
-    const { handler, guard } = await setupGuard(erpHost, ["/auth/login"], ["/listar/"]);
-    const route = createFakeRoute("POST", `https://${erpHost}/produtos/listar/format/json`);
+  it.each([
+    `https://${erpHost}/produtos/listar/format/json`,
+    `https://${erpHost}/estoque-interno/carregaRelatorioEstoque/format/json`,
+  ])("permite POST em endpoint AJAX de leitura (%s) quando o sufixo é liberado", async (url) => {
+    const { handler, guard } = await setupGuard(erpHost, ["/auth/login"], ["/format/json"]);
+    const route = createFakeRoute("POST", url);
 
     await handler(route);
 
@@ -102,7 +105,7 @@ describe("applyReadOnlyGuard (AT-004)", () => {
     expect(guard.getBlockedAttempt()).toBeNull();
   });
 
-  it("continua bloqueando POST de listagem quando o padrão não foi liberado", async () => {
+  it("continua bloqueando POST de endpoint AJAX quando o sufixo não foi liberado", async () => {
     const { handler, guard } = await setupGuard(erpHost, ["/auth/login"]);
     const route = createFakeRoute("POST", `https://${erpHost}/produtos/listar/format/json`);
 

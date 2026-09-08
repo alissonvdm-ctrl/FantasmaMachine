@@ -7,8 +7,15 @@ import { applyReadOnlyGuard, WriteAttemptError, type ReadOnlyGuard } from "@/wor
 /** Único caminho autorizado a fazer POST no ERP — estabelece sessão, não altera dado de negócio. */
 export const LOGIN_PATH_PREFIX = "/auth/login";
 
-/** Padrão de path das telas de listagem (DataTables server-side): POST de leitura, sem efeito de negócio. */
-export const LISTING_PATH_PATTERN = "/listar/";
+/**
+ * Sufixo comum a todos os endpoints AJAX de leitura do VendPago observados em
+ * produção até agora (`/produtos/listar/format/json`,
+ * `/estoque-interno/carregaRelatorioEstoque/format/json`): o verbo muda por
+ * tela, mas o sufixo `/format/json` é a convenção do próprio framework para
+ * respostas JSON — sinal mais confiável de "endpoint de leitura de dado
+ * tabular" do que tentar prever cada nome de verbo tela por tela.
+ */
+export const LISTING_PATH_PATTERN = "/format/json";
 
 function lancarSeBloqueado(guard: ReadOnlyGuard): void {
   const bloqueado = guard.getBlockedAttempt();
