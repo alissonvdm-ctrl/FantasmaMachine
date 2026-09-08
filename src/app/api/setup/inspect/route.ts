@@ -98,6 +98,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       })),
     );
 
+    // Alguns controles (ex.: seletor de itens por página do DataTables) ficam
+    // fora de qualquer <form> — capturados à parte para achar a paginação.
+    const selects: Array<{ id: string | null; name: string | null; options: string[] }> = await page.$$eval(
+      "select",
+      (elements) =>
+        elements.map((select) => ({
+          id: select.getAttribute("id"),
+          name: select.getAttribute("name"),
+          options: Array.from(select.querySelectorAll("option")).map((o) => (o.textContent ?? "").trim()),
+        })),
+    );
+
+    // Algumas colunas (ex.: percentuais no relatório de estoque da máquina) são
+    // preenchidas por uma animação de contagem após o carregamento — sem essa
+    // espera, a extração pega os valores ainda zerados/vazios.
+    await page.waitForTimeout(1500);
+
     const tables: string[][][] = await page.$$eval("table", (tableElements) =>
       tableElements.map((table) =>
         Array.from(table.querySelectorAll("tr")).map((row) =>
@@ -121,6 +138,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         pareceLogin: finalUrl.includes(LOGIN_PATH_PREFIX),
         tentativaDeEscritaBloqueada: bloqueado,
         forms,
+        selects,
         tables,
         links,
         bodyTextSnippet,
