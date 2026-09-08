@@ -1,11 +1,10 @@
-import argon2 from "argon2";
 import { createHmac } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
 import type { DbHandle } from "@/db/client";
 import { config } from "@/lib/config";
-import { hashToken, hashesMatch } from "@/lib/crypto";
+import { hashToken, hashesMatch, verifyPasswordHash } from "@/lib/crypto";
 import { getDispositivoPorTokenHash } from "@/repos/dispositivos";
 import type { Dispositivo } from "@/domain/types";
 
@@ -29,7 +28,7 @@ function signSessionPayload(secret: string): string {
 }
 
 export function verifyAdminPassword(password: string): Promise<boolean> {
-  return argon2.verify(config.adminPasswordHash, password);
+  return Promise.resolve(verifyPasswordHash(password, config.adminPasswordHash));
 }
 
 export function createAdminSessionValue(): string {

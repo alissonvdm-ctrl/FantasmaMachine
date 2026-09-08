@@ -233,6 +233,7 @@
 1. Substituir `better-sqlite3` por `@libsql/client`, apontando para um banco Turso (libSQL hospedado, SQL compatível com SQLite — mesmo `schema.sql`, mesmas queries com parâmetros nomeados). Localmente e em teste, o mesmo cliente aponta para `:memory:` ou um arquivo `file:`.
 2. Substituir `playwright` (que baixa um Chromium completo) por `playwright-core` + `@sparticuz/chromium` (binário Linux x64 compacto, compatível com ambiente serverless e com container comum).
 3. Substituir o processo `node-cron` standalone (`src/worker/index.ts`) por um endpoint HTTP protegido por segredo (`/api/cron/sync`), acionado externamente. Como o plano Vercel do usuário é Hobby (Cron nativo limitado a 1x/dia, incompatível com a exigência de 3x/dia do DEFINE/AT-005), o agendamento 3x/dia é feito por um workflow do GitHub Actions que chama o endpoint com o segredo — funciona independente do plano Vercel.
+4. Substituir `argon2` (Decision 6) por `scrypt` (nativo do `node:crypto`) no hash da senha de administração. Descoberto em produção: o addon nativo do `argon2` não tem build disponível para o runtime serverless da Vercel (`Error: No native build was found for ... runtime=node abi=137`), quebrando `/admin` com 500. `scrypt` não depende de binário compilado, funciona em qualquer runtime Node e mantém a mesma garantia (KDF com custo de memória, hash+salt, comparação em tempo constante).
 
 **Rationale:** Mantém a lógica de domínio, o schema e os testes praticamente intactos (libSQL é SQL-compatível com SQLite); resolve as três incompatibilidades reais com serverless (disco, processo longo, tamanho do binário do Chromium) sem reescrever a aplicação.
 
@@ -522,7 +523,7 @@ export const config = {
 | `VENDPAGO_USER` | string | env, obrigatório | Yes | Usuário de leitura no ERP |
 | `VENDPAGO_PASSWORD_ENC` | string | env, obrigatório | Yes | Senha cifrada em AES-256-GCM |
 | `ENCRYPTION_KEY` | string | env, obrigatório | Yes | Chave de decifragem da credencial |
-| `ADMIN_PASSWORD_HASH` | string | env, obrigatório | Yes | Hash Argon2 da senha de administração |
+| `ADMIN_PASSWORD_HASH` | string | env, obrigatório | Yes | Hash `scrypt` da senha de administração (Argon2 revisto na Decision 7 — binário nativo incompatível com o runtime serverless da Vercel) |
 | `SESSION_SECRET` | string | env, obrigatório | Yes | Assinatura do cookie de sessão |
 | `PLAYWRIGHT_TIMEOUT_MS` | number | env / `45000` | No | Timeout de navegação |
 | `LOG_LEVEL` | string | env / `info` | No | Nível de log estruturado |
@@ -536,7 +537,7 @@ export const config = {
 - Token de dispositivo trafega na URL e vaza por histórico, print ou compartilhamento. Mitigação: 32 bytes aleatórios, armazenamento apenas do hash SHA-256, escopo limitado a abrir/registrar/fechar visita de uma máquina, revogação individual e trilha de qual dispositivo originou cada visita. O token nunca dá acesso a `/admin` nem ao histórico de estoque.
 - A credencial do VendPago dá acesso à conta inteira, incluindo coleta financeira. Mitigação: cifrada em repouso com AES-256-GCM, decifrada apenas em memória no worker, nunca registrada em log, e ausente do processo web — apenas o worker a lê.
 - O ReadOnly Guard é a fronteira de menor privilégio contra o ERP e é coberto por teste automatizado. Sua remoção deve ser tratada como mudança de segurança, não como refactor.
-- Área administrativa protegida por cookie assinado, httpOnly, SameSite=Lax, com hash Argon2 da senha. Sem essa sessão, cadastro e estoque são inacessíveis.
+- Área administrativa protegida por cookie assinado, httpOnly, SameSite=Lax, com hash `scrypt` da senha (nativo do Node — ver Decision 7 sobre a troca do Argon2). Sem essa sessão, cadastro e estoque são inacessíveis.
 - Validação de entrada no domínio antes da persistência: quantidade inteira não negativa e limitada à capacidade da mola; produto restrito a IDs existentes na lista fixa.
 - Nenhum dado pessoal é tratado pelo sistema; os registros são operacionais (molas, produtos, quantidades).
 - Segredos vivem exclusivamente em variáveis de ambiente. O `.env.example` documenta as chaves sem valores reais.

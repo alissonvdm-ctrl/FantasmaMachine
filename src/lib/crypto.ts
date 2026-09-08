@@ -3,6 +3,7 @@ import {
   createDecipheriv,
   createHash,
   randomBytes,
+  scryptSync,
   timingSafeEqual,
 } from "node:crypto";
 
@@ -68,4 +69,29 @@ export function secretsMatch(a: string, b: string): boolean {
   const bufB = Buffer.from(b, "utf8");
   if (bufA.length !== bufB.length) return false;
   return timingSafeEqual(bufA, bufB);
+}
+
+const SCRYPT_KEYLEN = 64;
+
+/**
+ * Hash da senha de administração com `scrypt` (nativo do Node, sem binário
+ * externo) — `argon2` foi descartado por depender de um addon nativo que não
+ * tem build disponível no runtime serverless da Vercel (Decision 7 do DESIGN).
+ * Formato: "scrypt:<salt hex>:<derivedKey hex>".
+ */
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const derivedKey = scryptSync(password, salt, SCRYPT_KEYLEN);
+  return "scrypt:" + salt.toString("hex") + ":" + derivedKey.toString("hex");
+}
+
+export function verifyPasswordHash(password: string, storedHash: string): boolean {
+  const parts = storedHash.split(":");
+  if (parts.length !== 3 || parts[0] !== "scrypt") return false;
+  const [, saltHex, expectedHex] = parts as [string, string, string];
+  const salt = Buffer.from(saltHex, "hex");
+  const expected = Buffer.from(expectedHex, "hex");
+  const derivedKey = scryptSync(password, salt, expected.length);
+  if (derivedKey.length !== expected.length) return false;
+  return timingSafeEqual(derivedKey, expected);
 }
