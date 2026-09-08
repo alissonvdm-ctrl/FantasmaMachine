@@ -55,9 +55,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     await page.goto(parsed.toString(), { waitUntil: "networkidle" });
     await loginNoVendPagoSeNecessario(page, guard);
+    const urlAposLogin = page.url();
 
-    // Se o login aconteceu, a navegação original pode ter sido perdida — refaz.
-    if (page.url() !== parsed.toString()) {
+    // Se o login aconteceu, a navegação original pode ter sido perdida — refaz,
+    // mas só quando o login não nos deixou já no host de destino (evita descartar
+    // um possível ticket/token de SSO presente na URL de retorno).
+    if (new URL(urlAposLogin).host !== parsed.host) {
       await page.goto(parsed.toString(), { waitUntil: "networkidle" });
     }
 
@@ -86,17 +89,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ),
     );
 
+    const links: Array<{ text: string; href: string }> = await page.$$eval("a[href]", (anchors) =>
+      anchors
+        .map((a) => ({ text: (a.textContent ?? "").trim(), href: a.getAttribute("href") ?? "" }))
+        .filter((l) => l.href && l.href !== "#"),
+    );
+
     const bodyTextSnippet = (await page.innerText("body")).slice(0, 6000);
 
     return NextResponse.json(
       {
         requestedUrl: parsed.toString(),
+        urlAposLogin,
         finalUrl,
         title,
         pareceLogin: finalUrl.includes(LOGIN_PATH_PREFIX),
         tentativaDeEscritaBloqueada: bloqueado,
         forms,
         tables,
+        links,
         bodyTextSnippet,
       },
       { status: 200 },
