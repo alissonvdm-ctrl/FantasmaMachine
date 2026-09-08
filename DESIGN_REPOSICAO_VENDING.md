@@ -308,8 +308,9 @@
 | 53 | `src/app/api/cron/sync/route.ts` | Create (Decision 7) | Endpoint HTTP protegido por `CRON_SECRET` que aciona `executarSincronizacao`; substitui o item 42 | (general) | 41, 9 |
 | 54 | `.github/workflows/sync-cron.yml` | Create (Decision 7) | Aciona o item 53 três vezes ao dia (AT-005), independente do plano Vercel | (general) | 53 |
 | 55 | `vercel.json` | Create (Decision 7) | Cron nativo do Vercel como caminho alternativo (1x/dia no plano Hobby); mantém a rota documentada mesmo se o time migrar de plano | (general) | 53 |
+| 56 | `src/app/api/setup/migrate/route.ts` | Create (Decision 7) | Bootstrap do schema via GET protegido por `CRON_SECRET` na query string — permite aplicar o `schema.sql` no Turso a partir do navegador, sem terminal/CLI local | (general) | 14, 9 |
 
-**Total Files:** 55 (52 originais − 1 removido + 3 adicionados pela Decision 7)
+**Total Files:** 56 (52 originais − 1 removido + 4 adicionados pela Decision 7)
 
 ### Impacto retroativo da Decision 7 no manifesto original
 
