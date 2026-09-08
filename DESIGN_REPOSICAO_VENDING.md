@@ -230,10 +230,11 @@
 **Context:** O Build inicial (v1.0) assumiu VPS/container com processo Node de vida longa (`node-cron`) e SQLite em arquivo local (`better-sqlite3`), conforme Decision 1 e Decision 3. O usuário pediu deploy em Vercel, que é serverless: não há disco persistente entre invocações de função, não há processo de longa duração, e o pacote de função tem limite de tamanho incompatível com o Chromium completo do Playwright.
 
 **Choice:**
-1. Substituir `better-sqlite3` por `@libsql/client`, apontando para um banco Turso (libSQL hospedado, SQL compatível com SQLite — mesmo `schema.sql`, mesmas queries com parâmetros nomeados). Localmente e em teste, o mesmo cliente aponta para `:memory:` ou um arquivo `file:`.
+1. Substituir `better-sqlite3` por `@libsql/client`, apontando para um banco Turso (libSQL hospedado, SQL compatível com SQLite — mesmo DDL, mesmas queries com parâmetros nomeados). Localmente e em teste, o mesmo cliente aponta para `:memory:` ou um arquivo `file:`.
 2. Substituir `playwright` (que baixa um Chromium completo) por `playwright-core` + `@sparticuz/chromium` (binário Linux x64 compacto, compatível com ambiente serverless e com container comum).
 3. Substituir o processo `node-cron` standalone (`src/worker/index.ts`) por um endpoint HTTP protegido por segredo (`/api/cron/sync`), acionado externamente. Como o plano Vercel do usuário é Hobby (Cron nativo limitado a 1x/dia, incompatível com a exigência de 3x/dia do DEFINE/AT-005), o agendamento 3x/dia é feito por um workflow do GitHub Actions que chama o endpoint com o segredo — funciona independente do plano Vercel.
 4. Substituir `argon2` (Decision 6) por `scrypt` (nativo do `node:crypto`) no hash da senha de administração. Descoberto em produção: o addon nativo do `argon2` não tem build disponível para o runtime serverless da Vercel (`Error: No native build was found for ... runtime=node abi=137`), quebrando `/admin` com 500. `scrypt` não depende de binário compilado, funciona em qualquer runtime Node e mantém a mesma garantia (KDF com custo de memória, hash+salt, comparação em tempo constante).
+5. Embutir o DDL (`schema.sql` → `schema.ts`, string TS) em vez de ler um arquivo `.sql` em runtime. Descoberto em produção: o file tracing da função serverless da Vercel só empacota o que é importado como módulo JS/TS — `readFileSync` de um `.sql` solto falhava com `ENOENT` no ambiente publicado, mesmo funcionando localmente.
 
 **Rationale:** Mantém a lógica de domínio, o schema e os testes praticamente intactos (libSQL é SQL-compatível com SQLite); resolve as três incompatibilidades reais com serverless (disco, processo longo, tamanho do binário do Chromium) sem reescrever a aplicação.
 
@@ -265,7 +266,7 @@
 | 9 | `src/lib/config.ts` | Create | Leitura e validação de variáveis de ambiente | (general) | 5 |
 | 10 | `src/lib/logger.ts` | Create | Log estruturado JSON com correlação | (general) | 9 |
 | 11 | `src/lib/crypto.ts` | Create | Cifra/decifra da credencial e hash de tokens | (general) | 9 |
-| 12 | `src/db/schema.sql` | Create | DDL de produtos, molas, visitas, itens, snapshots, dispositivos | (general) | None |
+| 12 | `src/db/schema.ts` (renomeado de `schema.sql` — Decision 7) | Create | DDL de produtos, molas, visitas, itens, snapshots, dispositivos, embutido como string TS | (general) | None |
 | 13 | `src/db/client.ts` | Create | Conexão SQLite com WAL e foreign keys | (general) | 9 |
 | 14 | `src/db/migrate.ts` | Create | Aplicação idempotente do schema | (general) | 12, 13 |
 | 15 | `src/domain/types.ts` | Create | Tipos de domínio compartilhados | (general) | None |

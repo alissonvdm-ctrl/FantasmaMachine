@@ -1,14 +1,9 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { DbHandle } from "@/db/client";
 import { getDb } from "@/db/client";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { schemaSql } from "@/db/schema";
 
 export async function applyMigrations(db: DbHandle): Promise<void> {
-  const schema = readFileSync(join(__dirname, "schema.sql"), "utf8");
-  await db.executeMultiple(schema);
+  await db.executeMultiple(schemaSql);
 }
 
 function isMainModule(): boolean {

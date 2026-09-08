@@ -1,3 +1,9 @@
+/**
+ * DDL embutido como string TS (não lido de um .sql em runtime): funções
+ * serverless da Vercel só empacotam o que é importado como módulo — um
+ * `readFileSync` de um `.sql` solto falha com ENOENT no runtime (Decision 7).
+ */
+export const schemaSql = `
 CREATE TABLE IF NOT EXISTS produtos (
   id TEXT PRIMARY KEY,
   nome TEXT NOT NULL,
@@ -56,3 +62,4 @@ CREATE TABLE IF NOT EXISTS snapshot_itens (
   quantidade INTEGER NOT NULL CHECK (quantidade >= 0),
   PRIMARY KEY (snapshot_id, mola_codigo)
 );
+`;
