@@ -5,10 +5,17 @@ import { executarSincronizacao } from "@/worker/sync";
 import { getUltimoSnapshotOk } from "@/repos/snapshots";
 import { WriteAttemptError } from "@/worker/vendpago/readOnlyGuard";
 
-const HTML_OK = `
-<table id="tabela-estoque"><tbody>
-  <tr><td class="mola-codigo">A1</td><td class="produto-codigo">coca</td><td class="quantidade">7</td></tr>
+const PRODUTOS_HTML = `
+<table><thead><tr><th>Nome</th><th>Situação</th></tr></thead><tbody>
+  <tr><td>Coca-Cola(#1)</td><td>Ativo</td></tr>
 </tbody></table>`;
+
+const ESTOQUE_HTML = `
+<table><thead><tr><th>Seleção</th><th>Produto</th><th>Disponível / Capacidade (unid)</th></tr></thead><tbody>
+  <tr><td>A1</td><td>Coca-Cola</td><td>7 / 10</td></tr>
+</tbody></table>`;
+
+const DADOS_OK = async () => ({ produtosHtmls: [PRODUTOS_HTML], estoqueHtml: ESTOQUE_HTML });
 
 describe("executarSincronizacao", () => {
   let db: Client;
@@ -23,7 +30,7 @@ describe("executarSincronizacao", () => {
   });
 
   it("AT-005: persiste um novo snapshot 'ok' quando a coleta e o parser funcionam", async () => {
-    const snapshot = await executarSincronizacao({ db, coletarHtml: async () => HTML_OK });
+    const snapshot = await executarSincronizacao({ db, coletarDados: DADOS_OK });
 
     expect(snapshot.status).toBe("ok");
     const ultimo = await getUltimoSnapshotOk(db);
@@ -31,11 +38,11 @@ describe("executarSincronizacao", () => {
   });
 
   it("AT-007: falha na sincronização preserva o último snapshot válido e sua data", async () => {
-    const ok = await executarSincronizacao({ db, coletarHtml: async () => HTML_OK });
+    const ok = await executarSincronizacao({ db, coletarDados: DADOS_OK });
 
     const falhou = await executarSincronizacao({
       db,
-      coletarHtml: async () => {
+      coletarDados: async () => {
         throw new Error("timeout de navegação");
       },
       sleep: async () => {},
@@ -53,10 +60,10 @@ describe("executarSincronizacao", () => {
 
     const promise = executarSincronizacao({
       db,
-      coletarHtml: async () => {
+      coletarDados: async () => {
         chamadas += 1;
         if (chamadas === 1) throw new Error("timeout de navegação");
-        return HTML_OK;
+        return DADOS_OK();
       },
     });
 
@@ -73,7 +80,7 @@ describe("executarSincronizacao", () => {
 
     const snapshot = await executarSincronizacao({
       db,
-      coletarHtml: async () => {
+      coletarDados: async () => {
         chamadas += 1;
         throw new WriteAttemptError("POST", "https://www.erpvending.com.br/x");
       },
@@ -89,7 +96,7 @@ describe("executarSincronizacao", () => {
   it("descarta o resultado (não grava snapshot degradado) quando o parser não encontra linhas válidas", async () => {
     const snapshot = await executarSincronizacao({
       db,
-      coletarHtml: async () => "<html><body>layout mudou</body></html>",
+      coletarDados: async () => ({ produtosHtmls: [], estoqueHtml: "<html><body>layout mudou</body></html>" }),
       sleep: async () => {},
     });
 

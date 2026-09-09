@@ -8,6 +8,7 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL ?? "file:./data/app.db",
   databaseAuthToken: process.env.DATABASE_AUTH_TOKEN,
   erpHost: process.env.VENDPAGO_HOST ?? "www.erpvending.com.br",
+  vendtefHost: process.env.VENDTEF_HOST ?? "www.portalvendtef.com.br",
   adminPasswordHash: required("ADMIN_PASSWORD_HASH"),
   sessionSecret: required("SESSION_SECRET"),
   cronSecret: required("CRON_SECRET"),

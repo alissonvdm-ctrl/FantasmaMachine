@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { DbHandle } from "@/db/client";
 import { salvarSnapshot } from "@/repos/snapshots";
-import { coletarHtmlEstoque } from "@/worker/vendpago/scraper";
-import { parseEstoqueHtml } from "@/worker/vendpago/parser";
+import { coletarDadosVendPago, type DadosColetados } from "@/worker/vendpago/scraper";
+import { parseEstoqueHtml, parseProdutosHtml } from "@/worker/vendpago/parser";
 import { WriteAttemptError } from "@/worker/vendpago/readOnlyGuard";
 import { logger } from "@/lib/logger";
 import type { Snapshot, SnapshotItem } from "@/domain/types";
@@ -19,13 +19,13 @@ function esperar(ms: number): Promise<void> {
  * retentada — é um erro definitivo de segurança, não uma falha transitória.
  */
 async function coletarComRetry(
-  coletarHtml: () => Promise<string>,
+  coletarDados: () => Promise<DadosColetados>,
   sleep: (ms: number) => Promise<void>,
-): Promise<string> {
+): Promise<DadosColetados> {
   let ultimoErro: unknown;
   for (let tentativa = 0; tentativa < TENTATIVAS; tentativa++) {
     try {
-      return await coletarHtml();
+      return await coletarDados();
     } catch (err) {
       if (err instanceof WriteAttemptError) throw err;
       ultimoErro = err;
@@ -40,7 +40,7 @@ async function coletarComRetry(
 
 export interface SincronizacaoDeps {
   db: DbHandle;
-  coletarHtml?: () => Promise<string>;
+  coletarDados?: () => Promise<DadosColetados>;
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -50,14 +50,16 @@ export interface SincronizacaoDeps {
  * apenas trilha de auditoria (AT-007), não afeta a leitura corrente.
  */
 export async function executarSincronizacao(deps: SincronizacaoDeps): Promise<Snapshot> {
-  const coletarHtml = deps.coletarHtml ?? coletarHtmlEstoque;
+  const coletarDados = deps.coletarDados ?? coletarDadosVendPago;
   const sleep = deps.sleep ?? esperar;
   const id = randomUUID();
   const criadoEm = new Date().toISOString();
 
   try {
-    const html = await coletarComRetry(coletarHtml, sleep);
-    const linhas = parseEstoqueHtml(html);
+    const dados = await coletarComRetry(coletarDados, sleep);
+    const produtos = dados.produtosHtmls.flatMap(parseProdutosHtml);
+    const mapaNomeParaCodigo = new Map(produtos.map((p) => [p.nome, p.codigo]));
+    const linhas = parseEstoqueHtml(dados.estoqueHtml, mapaNomeParaCodigo);
     if (linhas.length === 0) {
       throw new Error("Parser não encontrou nenhuma linha de estoque válida");
     }

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Produtos — VendPago</title>
+</head>
+<body>
+  <h1>Produtos cadastrados</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>Descrição</th>
+        <th>Preço de custo</th>
+        <th>Categoria</th>
+        <th>Situação</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Coca-Cola 350ml(#101)</td>
+        <td>Sem descrição</td>
+        <td>R$ 4,50</td>
+        <td>Bebidas</td>
+        <td>Ativo</td>
+      </tr>
+      <tr>
+        <td>Guaraná 350ml(#102)</td>
+        <td>Sem descrição</td>
+        <td>R$ 4,00</td>
+        <td>Bebidas</td>
+        <td>Ativo</td>
+      </tr>
+      <tr>
+        <!-- inativo: deve ser incluído no mapa, mas com ativo=false -->
+        <td>Água 500ml(#103)</td>
+        <td>Sem descrição</td>
+        <td>R$ 2,50</td>
+        <td>Bebidas</td>
+        <td>Inativo</td>
+      </tr>
+      <tr>
+        <!-- linha malformada: sem código no nome — deve ser ignorada pelo parser -->
+        <td>Produto sem código</td>
+        <td>Sem descrição</td>
+        <td>R$ 1,00</td>
+        <td>Bebidas</td>
+        <td>Ativo</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

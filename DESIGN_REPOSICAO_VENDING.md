@@ -258,6 +258,36 @@
 - Dois segredos adicionais em produção: `DATABASE_AUTH_TOKEN` (Turso) e `CRON_SECRET` (protege o endpoint de sincronização).
 - O caminho de deploy self-hosted (Docker/VPS) documentado no README continua funcional: o container roda só a app (sem processo worker separado) e qualquer agendador externo (crontab do host, GitHub Actions) pode chamar o mesmo `/api/cron/sync`.
 
+### Decision 8: Extração real de dados via reconhecimento em produção (parser + scraper)
+
+| Attribute | Value |
+|---|---|
+| **Status** | Accepted |
+| **Date** | 2026-09-09 |
+| **Source** | Reconhecimento em produção via endpoint de diagnóstico (`/api/setup/inspect`) |
+
+**Context:** O parser e o scraper originais (v1.0) foram escritos sem nunca ter visto o HTML real do VendPago — a estrutura verdadeira das telas só foi confirmada depois, navegando com o endpoint de diagnóstico (Decision 2, amendments 2-4). Duas fontes de dados ficaram confirmadas: `/produtos` (erpvending.com.br, catálogo paginado) e o relatório de estoque da máquina (portalvendtef.com.br, após handoff de SSO), cada uma com uma particularidade que o parser original não previa.
+
+**Choice:**
+1. `parseProdutosHtml`/`parseEstoqueHtml` (parser.ts) identificam a tabela certa pelo **texto do cabeçalho** (ex.: colunas contendo "Nome"/"Situação", ou "Seleção"/"Produto"/"Disponível"), não por id/classe CSS — o VendPago não expõe ids estáveis nas tabelas em si, só nalguns controles avulsos (ex.: paginação).
+2. O código do produto (mesmo id usado em `/produtos/edit/pid/<id>`) vem embutido no fim do nome exibido, ex.: `"Acessórios - Shield Basico(#14)"` — extraído por regex, removendo antes o texto literal de ícones do Material Icons (`check_circle`, `warning`, ...) que aparece como conteúdo real de algumas células com indicador visual.
+3. O relatório de estoque da máquina mostra o produto só pelo **nome**, sem código embutido — `parseEstoqueHtml` recebe um `mapaNomeParaCodigo` (construído a partir de `parseProdutosHtml` sobre todas as páginas de `/produtos`) para resolver o código real. Linha cujo nome não bate com nenhum produto conhecido é descartada.
+4. `/produtos` pagina no máximo 20 itens (o seletor "Exibir" não oferece opção maior) — `coletarPaginasProdutos` (scraper.ts) clica no botão "próxima página" (`#produtos-table-pagination-buttons`, localizado por texto "chevron_right" — sem `href` real) até acumular o total anunciado em `#produtos-table-pagination-info`, sem assumir um número fixo de páginas.
+5. Os percentuais/quantidades do relatório de estoque da máquina são preenchidos por uma animação de contagem após o carregamento — confirmado comparando a extração de tabela (vazia) com o texto da página capturado alguns milissegundos depois (correto). O scraper aguarda 1.5s após `networkidle` antes de capturar o HTML final.
+6. Linha com quantidade disponível negativa (ex.: `"-2 / 12"`, uma venda além do estoque observada em produção — anomalia do próprio VendPago) é descartada pelo parser, não persistida: a coluna `snapshot_itens.quantidade` tem `CHECK (quantidade >= 0)`, e um valor negativo não é um estado físico válido de estoque.
+7. `SincronizacaoDeps.coletarHtml` (uma string) virou `coletarDados` (`{ produtosHtmls: string[]; estoqueHtml: string }`) — a resolução de código por nome exige as duas fontes na mesma execução.
+
+**Rationale:** Casar pelo cabeçalho e por sufixo de convenção (`/format/json`, ids de paginação) em vez de seletores CSS específicos é mais resiliente ao que já se mostrou instável entre reconhecimentos (o verbo do endpoint AJAX mudou por tela). Resolver o produto por nome (não por código) no relatório da máquina é a única opção disponível — a tela não expõe o código ali.
+
+**Alternatives Rejected:**
+1. Selecionar células por posição fixa (índice de coluna hardcoded) — quebra silenciosamente se o VendPago reordenar colunas; o cabeçalho é a fonte de verdade real da tela.
+2. Persistir a linha com quantidade negativa clampada em 0 em vez de descartá-la — mudaria um dado que o próprio VendPago está inconsistente sobre, sem necessidade: a linha anterior/seguinte do mesmo snapshot já reflete o estado real assim que a inconsistência se resolve no ERP.
+
+**Consequences:**
+- Uma sincronização faz uma requisição adicional (todas as páginas de `/produtos`) antes de ler o estoque da máquina — mais lento que ler só uma tela, mas necessário para resolver os códigos.
+- `estoque-interno/relatorio-estoque` (estoque fora da máquina) permanece confirmado como acessível (Decision 2, 3ª rodada) mas **não está incorporado ao domínio/sync** ainda — o schema atual (`Snapshot`/`SnapshotItem`) é escopado a estoque por mola da máquina; usar aquela tela exigiria uma tabela/feature nova, fora do escopo desta correção.
+- `produtos`/`molas` (tabelas de catálogo/planograma) continuam não seedadas automaticamente por este sync — o nome→código é resolvido em memória a cada execução, sem persistir o catálogo. Seed inicial de `produtos`/`molas` fica como próximo passo, se o usuário quiser essas telas administrativas populadas automaticamente também.
+
 ---
 
 ## File Manifest

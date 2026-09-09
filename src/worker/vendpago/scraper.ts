@@ -75,13 +75,59 @@ export async function loginNoVendPagoSeNecessario(page: Page, guard: ReadOnlyGua
   lancarSeBloqueado(guard);
 }
 
+/** Ids reais dos controles de paginação de `/produtos` (ver reconhecimento em produção). */
+const PRODUTOS_PAGINACAO_INFO_ID = "produtos-table-pagination-info";
+const PRODUTOS_PAGINACAO_BOTOES_ID = "produtos-table-pagination-buttons";
+
+async function extrairLinksDaPagina(page: Page): Promise<LinkPagina[]> {
+  return page.$$eval("a[href]", (anchors) =>
+    anchors
+      .map((a) => ({ text: (a.textContent ?? "").trim(), href: a.getAttribute("href") ?? "" }))
+      .filter((l) => l.href && l.href !== "#"),
+  );
+}
+
 /**
- * Login e navegação até a tela de estoque do VendPago, retornando o HTML da
- * página para o parser. Usa `playwright-core` + `@sparticuz/chromium` (binário
- * compacto) em vez do `playwright` completo — compatível com função serverless
- * (Vercel) e com container comum (Decision 7 do DESIGN).
+ * `/produtos` pagina no máximo 20 itens por vez (o próprio seletor "Exibir"
+ * não oferece opção maior) — coleta o HTML de cada página clicando em
+ * "próxima" até acumular o total anunciado em `produtos-table-pagination-info`
+ * ("Mostrando 1–20 de 22 produtos"), sem assumir um número fixo de páginas.
  */
-export async function coletarHtmlEstoque(): Promise<string> {
+export async function coletarPaginasProdutos(page: Page): Promise<string[]> {
+  const paginas: string[] = [await page.content()];
+
+  const infoTexto = await page.locator(`#${PRODUTOS_PAGINACAO_INFO_ID}`).innerText();
+  const total = Number(infoTexto.match(/de (\d+)/)?.[1] ?? paginas.length);
+  const porPagina = Number(infoTexto.match(/–(\d+) de/)?.[1] ?? total);
+
+  let coletados = porPagina;
+  while (coletados < total) {
+    await page.locator(`#${PRODUTOS_PAGINACAO_BOTOES_ID}`).getByText("chevron_right", { exact: true }).click();
+    await page.waitForTimeout(500);
+    paginas.push(await page.content());
+    const proximaInfo = await page.locator(`#${PRODUTOS_PAGINACAO_INFO_ID}`).innerText();
+    const ateAgora = Number(proximaInfo.match(/–(\d+) de/)?.[1] ?? coletados);
+    if (ateAgora <= coletados) break; // segurança: evita loop infinito se a paginação não avançar
+    coletados = ateAgora;
+  }
+  return paginas;
+}
+
+export interface DadosColetados {
+  produtosHtmls: string[];
+  estoqueHtml: string;
+}
+
+/**
+ * Login e navegação por todas as fontes de dados do VendPago necessárias à
+ * sincronização (Decision 2, amendments): catálogo de produtos (com
+ * paginação) para resolver nome→código, e o relatório de estoque da máquina
+ * em portalvendtef.com.br (via handoff de SSO). Usa `playwright-core` +
+ * `@sparticuz/chromium` (binário compacto) em vez do `playwright` completo —
+ * compatível com função serverless (Vercel) e com container comum
+ * (Decision 7 do DESIGN).
+ */
+export async function coletarDadosVendPago(): Promise<DadosColetados> {
   const browser = await launchBrowser();
   try {
     const context = await browser.newContext();
@@ -91,17 +137,29 @@ export async function coletarHtmlEstoque(): Promise<string> {
     page.setDefaultTimeout(config.playwrightTimeoutMs);
 
     try {
-      await page.goto(`https://${config.erpHost}/produtos`);
+      await page.goto(`https://${config.erpHost}/produtos`, { waitUntil: "networkidle" });
       await loginNoVendPagoSeNecessario(page, guard);
+      if (!page.url().includes("/produtos")) {
+        await page.goto(`https://${config.erpHost}/produtos`, { waitUntil: "networkidle" });
+      }
+      const linksAposLogin = await extrairLinksDaPagina(page);
+      const produtosHtmls = await coletarPaginasProdutos(page);
 
-      // TODO: ajustar para a URL real da tela de estoque por mola quando confirmada
-      // (ver Open Questions do DEFINE — pendente de reconhecimento em produção).
-      await page.goto(`https://${config.erpHost}/estoque`);
-      await page.waitForSelector("#tabela-estoque");
+      const handoff = encontrarLinkHandoffSso(linksAposLogin, config.vendtefHost);
+      if (handoff) {
+        await page.goto(handoff, { waitUntil: "networkidle" });
+      }
+      await page.goto(`https://${config.vendtefHost}/terminal/relatorioEstoque/tid/1`, {
+        waitUntil: "networkidle",
+      });
+      // Os percentuais/quantidades do relatório são preenchidos por uma
+      // animação de contagem após o carregamento (ver reconhecimento em
+      // produção) — sem essa espera a extração pega células ainda vazias.
+      await page.waitForTimeout(1500);
+      const estoqueHtml = await page.content();
 
-      const html = await page.content();
       lancarSeBloqueado(guard);
-      return html;
+      return { produtosHtmls, estoqueHtml };
     } catch (err) {
       // Uma tentativa de escrita bloqueada costuma se manifestar como timeout
       // ou falha de navegação genérica — a causa raiz real é sempre priorizada.

@@ -2,39 +2,72 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Estoque — VendPago</title>
+  <title>Relatório de Estoque — VendTEF</title>
 </head>
 <body>
-  <h1>Estoque da máquina</h1>
-  <table id="tabela-estoque">
+  <h1>Relatório de Estoque da Máquina</h1>
+  <table>
     <thead>
       <tr>
-        <th>Mola</th>
+        <th>Seleção</th>
         <th>Produto</th>
-        <th>Quantidade</th>
+        <th>%</th>
+        <th>Disponível / Capacidade (unid)</th>
+        <th>Qtde. vendida nos últimos X dias</th>
+        <th>Data de Vencimento</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td class="mola-codigo">A1</td>
-        <td class="produto-codigo">COCA350</td>
-        <td class="quantidade">8</td>
+        <td>A1</td>
+        <td>Coca-Cola 350ml</td>
+        <td>70%</td>
+        <td>7 / 10</td>
+        <td>3</td>
+        <td>-</td>
       </tr>
       <tr>
-        <td class="mola-codigo">A2</td>
-        <td class="produto-codigo">GUARANA350</td>
-        <td class="quantidade">5</td>
+        <td>A2</td>
+        <td>Guaraná 350ml</td>
+        <td>50%</td>
+        <td>5 / 10</td>
+        <td>2</td>
+        <td>-</td>
       </tr>
       <tr>
-        <td class="mola-codigo">B1</td>
-        <td class="produto-codigo">AGUA500</td>
-        <td class="quantidade">0</td>
+        <td>B1</td>
+        <td>Água 500ml</td>
+        <td>0%</td>
+        <td>0 / 10</td>
+        <td>10</td>
+        <td>-</td>
       </tr>
       <tr>
-        <!-- linha malformada: sem quantidade — deve ser ignorada pelo parser -->
-        <td class="mola-codigo">B2</td>
-        <td class="produto-codigo">CHOCOLATE</td>
-        <td class="quantidade"></td>
+        <!-- linha malformada: quantidade ausente — deve ser ignorada pelo parser -->
+        <td>B2</td>
+        <td>Produto sem estoque</td>
+        <td></td>
+        <td></td>
+        <td>0</td>
+        <td>-</td>
+      </tr>
+      <tr>
+        <!-- produto não cadastrado no catálogo (sem código conhecido) — deve ser ignorada -->
+        <td>B3</td>
+        <td>Produto Desconhecido</td>
+        <td>50%</td>
+        <td>5 / 10</td>
+        <td>0</td>
+        <td>-</td>
+      </tr>
+      <tr>
+        <!-- anomalia de produção: disponível negativo (venda além do estoque) — deve ser ignorada -->
+        <td>B4</td>
+        <td>Coca-Cola 350ml</td>
+        <td>-17%</td>
+        <td>-2 / 12</td>
+        <td>43</td>
+        <td>-</td>
       </tr>
     </tbody>
   </table>
