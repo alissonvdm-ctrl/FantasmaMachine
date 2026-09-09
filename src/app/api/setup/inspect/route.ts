@@ -12,6 +12,9 @@ import {
 
 const ALLOWED_HOSTS = new Set(["www.erpvending.com.br", "www.portalvendtef.com.br"]);
 
+/** Login + navegação + esperas pode passar do limite padrão de função serverless (ver /api/cron/sync). */
+export const maxDuration = 60;
+
 interface FormInfo {
   action: string;
   method: string;

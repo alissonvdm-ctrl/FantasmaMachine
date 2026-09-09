@@ -13,6 +13,16 @@ import { executarSincronizacao } from "@/worker/sync";
  * padrão de `/api/setup/migrate`, para permitir disparo manual pelo navegador
  * sem depender de terminal/curl para setar o header Authorization.
  */
+/**
+ * O fluxo real (login + catálogo paginado + handoff de SSO + relatório de
+ * estoque) passa do limite padrão de execução de função serverless — a
+ * primeira chamada real falhou com "Target page, context or browser has
+ * been closed" no meio da navegação, sintoma de a função ter sido encerrada
+ * por timeout enquanto o Chromium ainda navegava. 60s é o máximo permitido
+ * no plano Hobby da Vercel.
+ */
+export const maxDuration = 60;
+
 function autorizado(request: NextRequest): boolean {
   const header = request.headers.get("authorization") ?? "";
   if (secretsMatch(header, `Bearer ${config.cronSecret}`)) return true;
