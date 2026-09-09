@@ -4,16 +4,28 @@ function required(key: string): string {
   return value;
 }
 
+/**
+ * O painel da Vercel já salvou mais de uma variável como string vazia em vez
+ * de ausente (ver Decision 7 do DESIGN) — `??` não pega esse caso, só
+ * `null`/`undefined`. Variáveis com valor padrão usam esta função em vez de
+ * `??` direto para não ficar vulnerável ao mesmo bug silenciosamente (aqui
+ * não há `required()` para acusar o problema, já que têm um padrão válido).
+ */
+function optional(key: string, valorPadrao: string): string {
+  const value = process.env[key];
+  return value && value.trim() !== "" ? value : valorPadrao;
+}
+
 export const config = {
-  databaseUrl: process.env.DATABASE_URL ?? "file:./data/app.db",
+  databaseUrl: optional("DATABASE_URL", "file:./data/app.db"),
   databaseAuthToken: process.env.DATABASE_AUTH_TOKEN,
-  erpHost: process.env.VENDPAGO_HOST ?? "www.erpvending.com.br",
-  vendtefHost: process.env.VENDTEF_HOST ?? "www.portalvendtef.com.br",
+  erpHost: optional("VENDPAGO_HOST", "www.erpvending.com.br"),
+  vendtefHost: optional("VENDTEF_HOST", "www.portalvendtef.com.br"),
   adminPasswordHash: required("ADMIN_PASSWORD_HASH"),
   sessionSecret: required("SESSION_SECRET"),
   cronSecret: required("CRON_SECRET"),
-  playwrightTimeoutMs: Number(process.env.PLAYWRIGHT_TIMEOUT_MS ?? 45000),
-  logLevel: process.env.LOG_LEVEL ?? "info",
+  playwrightTimeoutMs: Number(optional("PLAYWRIGHT_TIMEOUT_MS", "45000")),
+  logLevel: optional("LOG_LEVEL", "info"),
 } as const;
 
 /**

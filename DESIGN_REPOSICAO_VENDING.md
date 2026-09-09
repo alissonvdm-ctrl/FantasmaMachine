@@ -288,6 +288,8 @@
 - `estoque-interno/relatorio-estoque` (estoque fora da máquina) permanece confirmado como acessível (Decision 2, 3ª rodada) mas **não está incorporado ao domínio/sync** ainda — o schema atual (`Snapshot`/`SnapshotItem`) é escopado a estoque por mola da máquina; usar aquela tela exigiria uma tabela/feature nova, fora do escopo desta correção.
 - `produtos`/`molas` (tabelas de catálogo/planograma) continuam não seedadas automaticamente por este sync — o nome→código é resolvido em memória a cada execução, sem persistir o catálogo. Seed inicial de `produtos`/`molas` fica como próximo passo, se o usuário quiser essas telas administrativas populadas automaticamente também.
 
+**Amendment (2026-09-09, primeira execução real):** A primeira chamada real de `/api/cron/sync` falhou com `net::ERR_NAME_NOT_RESOLVED at https://produtos/` — `VENDPAGO_HOST` estava salva como string vazia no painel da Vercel (mesma classe de bug da Decision 7, item 4, mas silenciosa aqui: `erpHost` usa um valor padrão em vez de `required()`, e `??` não pega string vazia, só `null`/`undefined`). `config.ts` passou a usar uma função `optional(key, valorPadrao)` para toda variável com padrão (`DATABASE_URL`, `VENDPAGO_HOST`, `VENDTEF_HOST`, `PLAYWRIGHT_TIMEOUT_MS`, `LOG_LEVEL`), tratando string vazia como ausente.
+
 ---
 
 ## File Manifest
