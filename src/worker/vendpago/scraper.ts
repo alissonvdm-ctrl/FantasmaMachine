@@ -79,6 +79,25 @@ export async function loginNoVendPagoSeNecessario(page: Page, guard: ReadOnlyGua
 const PRODUTOS_PAGINACAO_INFO_ID = "produtos-table-pagination-info";
 const PRODUTOS_PAGINACAO_BOTOES_ID = "produtos-table-pagination-buttons";
 
+/**
+ * O VendPago mostra um modal de "novidades" (`#modal_novidades`) ao entrar
+ * na área logada, cujo backdrop intercepta cliques em qualquer elemento por
+ * baixo — inclusive o botão de próxima página. Fechado via mutação direta do
+ * DOM (não um clique real): um clique no botão "Fechar" do modal poderia
+ * disparar um POST (ex.: marcar notificação como lida) que o ReadOnlyGuard
+ * bloquearia, transformando um simples dispensar de popup num erro de
+ * segurança. `page.evaluate` só manipula o DOM local, sem rede.
+ */
+async function fecharModalDeNovidadesSeAberto(page: Page): Promise<void> {
+  await page
+    .evaluate(() => {
+      document.getElementById("modal_novidades")?.remove();
+      document.querySelectorAll(".modal-backdrop").forEach((el) => el.remove());
+      document.body.classList.remove("modal-open");
+    })
+    .catch(() => {});
+}
+
 async function extrairLinksDaPagina(page: Page): Promise<LinkPagina[]> {
   return page.$$eval("a[href]", (anchors) =>
     anchors
@@ -94,6 +113,7 @@ async function extrairLinksDaPagina(page: Page): Promise<LinkPagina[]> {
  * ("Mostrando 1–20 de 22 produtos"), sem assumir um número fixo de páginas.
  */
 export async function coletarPaginasProdutos(page: Page): Promise<string[]> {
+  await fecharModalDeNovidadesSeAberto(page);
   const paginas: string[] = [await page.content()];
 
   const infoTexto = await page.locator(`#${PRODUTOS_PAGINACAO_INFO_ID}`).innerText();
@@ -156,6 +176,7 @@ export async function coletarDadosVendPago(): Promise<DadosColetados> {
       // animação de contagem após o carregamento (ver reconhecimento em
       // produção) — sem essa espera a extração pega células ainda vazias.
       await page.waitForTimeout(1500);
+      await fecharModalDeNovidadesSeAberto(page);
       const estoqueHtml = await page.content();
 
       lancarSeBloqueado(guard);
