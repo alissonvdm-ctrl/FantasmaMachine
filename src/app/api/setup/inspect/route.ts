@@ -64,8 +64,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           .filter((l) => l.href && l.href !== "#"),
       );
 
-    await page.goto(parsed.toString(), { waitUntil: "networkidle" });
+    // `networkidle` sem limite pode nunca resolver em painéis com polling em
+    // segundo plano (ver /api/cron/sync) — aqui é usado com timeout curto
+    // como "melhor esforço" para dar tempo do conteúdo dinâmico (ex.: tabela
+    // carregada via AJAX) renderizar, sem arriscar travar a função inteira.
+    const aguardarAssentar = (): Promise<void> =>
+      page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+
+    await page.goto(parsed.toString(), { waitUntil: "domcontentloaded" });
     await loginNoVendPagoSeNecessario(page, guard);
+    await aguardarAssentar();
     const urlAposLogin = page.url();
     // Links da página logo após o login, antes de qualquer re-navegação — é aqui
     // que aparece a navegação real (abas ERP/VendTEF/PayBlu), útil para achar o
@@ -79,9 +87,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (new URL(urlAposLogin).host !== parsed.host) {
       handoffUsado = encontrarLinkHandoffSso(linksAposLogin, parsed.host);
       if (handoffUsado) {
-        await page.goto(handoffUsado, { waitUntil: "networkidle" });
+        await page.goto(handoffUsado, { waitUntil: "domcontentloaded" });
       }
-      await page.goto(parsed.toString(), { waitUntil: "networkidle" });
+      await page.goto(parsed.toString(), { waitUntil: "domcontentloaded" });
+      await aguardarAssentar();
     }
 
     const finalUrl = page.url();

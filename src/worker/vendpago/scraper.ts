@@ -2,6 +2,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 import sparticuzChromium from "@sparticuz/chromium";
 import { config, getErpCredentials } from "@/lib/config";
 import { decrypt } from "@/lib/crypto";
+import { logger } from "@/lib/logger";
 import { applyReadOnlyGuard, WriteAttemptError, type ReadOnlyGuard } from "@/worker/vendpago/readOnlyGuard";
 
 /** Único caminho autorizado a fazer POST no ERP — estabelece sessão, não altera dado de negócio. */
@@ -148,6 +149,9 @@ export interface DadosColetados {
  * (Decision 7 do DESIGN).
  */
 export async function coletarDadosVendPago(): Promise<DadosColetados> {
+  const inicio = Date.now();
+  const marcar = (etapa: string): void => logger.info("sync.etapa", { etapa, decorridoMs: Date.now() - inicio });
+
   const browser = await launchBrowser();
   try {
     const context = await browser.newContext();
@@ -157,27 +161,39 @@ export async function coletarDadosVendPago(): Promise<DadosColetados> {
     page.setDefaultTimeout(config.playwrightTimeoutMs);
 
     try {
-      await page.goto(`https://${config.erpHost}/produtos`, { waitUntil: "networkidle" });
+      // `waitUntil: "networkidle"` espera a rede ficar ociosa por 500ms — em
+      // painéis com widgets/polling em segundo plano isso pode nunca
+      // acontecer, estourando o timeout da função inteira (Vercel matou a
+      // execução aos 60s em produção). `domcontentloaded` + espera pelo
+      // elemento real que precisamos é bem mais rápido e igualmente correto.
+      await page.goto(`https://${config.erpHost}/produtos`, { waitUntil: "domcontentloaded" });
       await loginNoVendPagoSeNecessario(page, guard);
       if (!page.url().includes("/produtos")) {
-        await page.goto(`https://${config.erpHost}/produtos`, { waitUntil: "networkidle" });
+        await page.goto(`https://${config.erpHost}/produtos`, { waitUntil: "domcontentloaded" });
       }
+      await page.waitForSelector(`#${PRODUTOS_PAGINACAO_INFO_ID}`, { timeout: 15000 });
+      marcar("produtos_carregado");
+
       const linksAposLogin = await extrairLinksDaPagina(page);
       const produtosHtmls = await coletarPaginasProdutos(page);
+      marcar("produtos_coletados");
 
       const handoff = encontrarLinkHandoffSso(linksAposLogin, config.vendtefHost);
       if (handoff) {
-        await page.goto(handoff, { waitUntil: "networkidle" });
+        await page.goto(handoff, { waitUntil: "domcontentloaded" });
+        marcar("handoff_sso_feito");
       }
       await page.goto(`https://${config.vendtefHost}/terminal/relatorioEstoque/tid/1`, {
-        waitUntil: "networkidle",
+        waitUntil: "domcontentloaded",
       });
+      await page.waitForSelector("table", { timeout: 15000 });
       // Os percentuais/quantidades do relatório são preenchidos por uma
       // animação de contagem após o carregamento (ver reconhecimento em
       // produção) — sem essa espera a extração pega células ainda vazias.
       await page.waitForTimeout(1500);
       await fecharModalDeNovidadesSeAberto(page);
       const estoqueHtml = await page.content();
+      marcar("estoque_coletado");
 
       lancarSeBloqueado(guard);
       return { produtosHtmls, estoqueHtml };
